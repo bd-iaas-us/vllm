@@ -119,7 +119,10 @@ class ScaledActivation(nn.Module):
         return self.act(x) / self.scales
 
     def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor):
+        param.data = param.data.cpu()
         param_data = param.data
+        
+        #torch.cuda.synchronize()  # Force CPU synchronization
         if self.input_is_parallel:
             tp_rank = get_tensor_model_parallel_rank()
             shard_size = param_data.shape[0]
@@ -127,6 +130,7 @@ class ScaledActivation(nn.Module):
             loaded_weight = loaded_weight.narrow(0, start_idx, shard_size)
         assert param_data.shape == loaded_weight.shape
         param_data.copy_(loaded_weight)
+        #print(f"\n ~~~~~~~~ param data location {param_data.device}")
 
 
 _ACTIVATION_REGISTRY = {

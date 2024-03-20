@@ -43,6 +43,7 @@ from vllm.sequence import SamplerOutput
 
 KVCache = Tuple[torch.Tensor, torch.Tensor]
 
+layer_count = 0
 
 class OPTLearnedPositionalEmbedding(nn.Embedding):
 
@@ -99,12 +100,26 @@ class OPTAttention(nn.Module):
         kv_cache: KVCache,
         input_metadata: InputMetadata,
     ) -> torch.Tensor:
+        global layer_count 
+        layer_count += 1
+            
+        print(f"+++++ layer {layer_count} moving attention weights to device")
+
+        self.qkv_proj.to(device = hidden_states.device)
+        self.out_proj.to(device = hidden_states.device)
+
         qkv, _ = self.qkv_proj(hidden_states)
+        # self.qkv_proj.weight = None
         q, k, v = qkv.chunk(chunks=3, dim=-1)
         key_cache, value_cache = kv_cache
         attn_output = self.attn(q, k, v, key_cache, value_cache,
                                 input_metadata)
         output, _ = self.out_proj(attn_output)
+
+        print("---- moving attention weights to cpu")
+
+        self.qkv_proj.to('cpu')
+        self.out_proj.to('cpu')
         return output
 
 
@@ -157,6 +172,10 @@ class OPTDecoderLayer(nn.Module):
         # Self Attention
         residual = hidden_states
         # 125m, 1.7B, ..., 175B applies layer norm BEFORE attention
+
+        self.self_attn_layer_norm.to(device = hidden_states.device)
+
+
         if self.do_layer_norm_before:
             hidden_states = self.self_attn_layer_norm(hidden_states)
         hidden_states = self.self_attn(hidden_states=hidden_states,
@@ -166,6 +185,12 @@ class OPTDecoderLayer(nn.Module):
         # 350m applies layer norm AFTER attention
         if not self.do_layer_norm_before:
             hidden_states = self.self_attn_layer_norm(hidden_states)
+
+        self.self_attn_layer_norm.weight.to('cpu')
+
+        self.final_layer_norm.to(device = hidden_states.device)
+        self.fc1.to(device = hidden_states.device)
+        self.fc2.to(device = hidden_states.device)
 
         # Fully Connected
         residual = hidden_states
@@ -179,6 +204,13 @@ class OPTDecoderLayer(nn.Module):
         # 350m applies layer norm AFTER attention
         if not self.do_layer_norm_before:
             hidden_states = self.final_layer_norm(hidden_states)
+
+        self.final_layer_norm.weight.to('cpu')
+        self.fc1.to('cpu')
+        self.fc2.to('cpu')
+
+        torch.cuda.empty_cache()
+
         return hidden_states
 
 
@@ -243,6 +275,14 @@ class OPTDecoder(nn.Module):
         kv_caches: List[KVCache],
         input_metadata: InputMetadata,
     ) -> torch.Tensor:
+        global layer_count 
+        layer_count = 0
+
+        if self.embed_tokens.weight.device.type == 'cpu':
+            self.embed_tokens.to(device=input_ids.device) 
+            self.embed_positions.to(device=input_ids.device) 
+            self.final_layer_norm.to(device=input_ids.device) 
+
         inputs_embeds = self.embed_tokens(input_ids)
         pos_embeds = self.embed_positions(positions)
         if self.project_in is not None:
@@ -352,3 +392,5 @@ class OPTForCausalLM(nn.Module):
                 weight_loader = getattr(param, "weight_loader",
                                         default_weight_loader)
                 weight_loader(param, loaded_weight)
+
+

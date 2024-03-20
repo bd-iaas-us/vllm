@@ -582,8 +582,13 @@ class ModelRunner:
             self.set_active_loras(lora_requests, lora_mapping)
 
         # Execute the model.
+        input_metadata.use_cuda_graph = False
         if input_metadata.use_cuda_graph:
             graph_batch_size = input_tokens.shape[0]
+            print(" ^^^^^^^^^^^ keyerror ^^^^^^^^^^^")
+            print(self.graph_runners.keys())
+            print(graph_batch_size)
+            print(" ^^^^^^^^^^^ keyerror ^^^^^^^^^^^")
             model_executable = self.graph_runners[graph_batch_size]
         else:
             model_executable = self.model

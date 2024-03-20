@@ -109,7 +109,7 @@ class GPUExecutor(ExecutorBase):
         self.driver_worker.init_cache_engine(cache_config=self.cache_config)
         # Warm up the model. This includes capturing the model into CUDA graph
         # if enforce_eager is False.
-        self.driver_worker.warm_up_model()
+        #self.driver_worker.warm_up_model()
 
     def execute_model(self,
                       seq_group_metadata_list: List[SequenceGroupMetadata],

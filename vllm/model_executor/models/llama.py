@@ -49,6 +49,30 @@ from vllm.sequence import SamplerOutput
 
 KVCache = Tuple[torch.Tensor, torch.Tensor]
 
+def print_gpu_memory():
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+
+        # Get CUDA device properties
+        device_properties = torch.cuda.get_device_properties(device)
+        total_memory = device_properties.total_memory
+
+        # Print the total GPU memory
+        print(f"Total GPU Memory (cuda:0): {total_memory / 1024**3:.2f} GB")
+
+        # Print the amount of GPU memory currently reserved
+        reserved_memory = torch.cuda.memory_reserved(device=device)
+        print(f"GPU Memory Reserved (cuda:0): {reserved_memory / 1024**3:.2f} GB")
+
+        # Print the amount of GPU memory currently allocated
+        allocated_memory = torch.cuda.memory_allocated(device=device)
+        print(f"GPU Memory Allocated (cuda:0): {allocated_memory / 1024**3:.2f} GB")
+
+        # Print the amount of GPU memory currently free
+        free_memory = total_memory - allocated_memory
+        print(f"GPU Memory Free (cuda:0): {free_memory / 1024**3:.2f} GB")
+
 
 class LlamaMLP(nn.Module):
 
@@ -74,6 +98,8 @@ class LlamaMLP(nn.Module):
         self.act_fn = SiluAndMul()
 
     def forward(self, x):
+        print("5_____________________")
+        print_gpu_memory()
         gate_up, _ = self.gate_up_proj(x)
         x = self.act_fn(gate_up)
         x, _ = self.down_proj(x)
@@ -152,6 +178,13 @@ class LlamaAttention(nn.Module):
         kv_cache: KVCache,
         input_metadata: InputMetadata,
     ) -> torch.Tensor:
+        print("4_____________________")
+        print_gpu_memory()
+        
+        if self.qkv_proj.weight.device.type == 'cpu':
+            self.qkv_proj.to(device=hidden_states.device)
+            
+            
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         q, k = self.rotary_emb(positions, q, k)
@@ -207,6 +240,8 @@ class LlamaDecoderLayer(nn.Module):
         residual: Optional[torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Self Attention
+        print("3_____________________")
+        print_gpu_memory()
         if residual is None:
             residual = hidden_states
             hidden_states = self.input_layernorm(hidden_states)
@@ -260,7 +295,18 @@ class LlamaModel(nn.Module):
         kv_caches: List[KVCache],
         input_metadata: InputMetadata,
     ) -> torch.Tensor:
+        print("2_____________________")
+        print_gpu_memory()
+
+        if self.embed_tokens.weight.device.type == 'cpu':
+            self.embed_tokens.to(device=input_ids.device) 
+            # print the self.embed_tokens.weight memory usage
+            print("++++++++++++++++")
+            print("self.embed_tokens.weight memory usage: ", self.embed_tokens.weight.element_size() * self.embed_tokens.weight.nelement() / 1024**3)
+            torch.cuda.synchronize()
+
         hidden_states = self.embed_tokens(input_ids)
+
         residual = None
         for i in range(len(self.layers)):
             layer = self.layers[i]
@@ -334,6 +380,8 @@ class LlamaForCausalLM(nn.Module):
         kv_caches: List[KVCache],
         input_metadata: InputMetadata,
     ) -> torch.Tensor:
+        print("1_____________________")
+        print_gpu_memory()
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    input_metadata)
         return hidden_states
@@ -389,3 +437,6 @@ class LlamaForCausalLM(nn.Module):
                 weight_loader = getattr(param, "weight_loader",
                                         default_weight_loader)
                 weight_loader(param, loaded_weight)
+
+        
+

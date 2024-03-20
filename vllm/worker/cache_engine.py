@@ -48,7 +48,10 @@ class CacheEngine:
             self.dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
         # Initialize the cache.
+        # qian: to do, track the memory usage of the cache
+        print("\n ---------- ready to allocate gpu cache ---------- \n")
         self.gpu_cache = self.allocate_gpu_cache()
+        print("\n ---------- allocated gpu cache ---------- \n")
         self.cpu_cache = self.allocate_cpu_cache()
 
         # Initialize the stream for caching operations.

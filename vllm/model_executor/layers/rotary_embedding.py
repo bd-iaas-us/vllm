@@ -62,6 +62,8 @@ class RotaryEmbedding(nn.Module):
         self.is_neox_style = is_neox_style
 
         cache = self._compute_cos_sin_cache()
+        print("~~~~~~~~~~~~~~~ cache: ", cache.device, torch.get_default_dtype())
+        #cache = cache.to('cpu')
         cache = cache.to(torch.get_default_dtype())
         self.register_buffer("cos_sin_cache", cache, persistent=False)
 

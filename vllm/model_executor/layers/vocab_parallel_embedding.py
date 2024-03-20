@@ -77,7 +77,7 @@ class VocabParallelEmbedding(torch.nn.Module):
         self.weight = Parameter(
             torch.empty(self.num_embeddings_per_partition,
                         self.embedding_dim,
-                        dtype=params_dtype))
+                        dtype=params_dtype, device='cpu' ))
         set_weight_attrs(self.weight, {
             "parallel_dim": 0,
             "weight_loader": self.weight_loader
@@ -88,7 +88,15 @@ class VocabParallelEmbedding(torch.nn.Module):
         assert loaded_weight.shape[parallel_dim] == self.org_vocab_size
         loaded_weight = loaded_weight[self.vocab_start_index:self.
                                       vocab_end_index]
-        param[:loaded_weight.shape[0]].data.copy_(loaded_weight)
+        param.data = param.data.cpu()
+        
+        param_data = param[:loaded_weight.shape[0]].data
+
+        #torch.cuda.synchronize()  # Force CPU synchronization
+
+        param_data.copy_(loaded_weight)
+
+        #print(f"\n ~~~~~~~~ param data location {param.data.device}")
 
     def forward(self, input_):
         if self.tp_size > 1:
@@ -101,6 +109,8 @@ class VocabParallelEmbedding(torch.nn.Module):
         else:
             masked_input = input_
             # Get the embeddings.
+
+        print("???????????? VocabParallelEmbedding weight: ", type(self.weight) )
         output_parallel = F.embedding(masked_input, self.weight)
         # Mask the output embedding.
         if self.tp_size > 1:
