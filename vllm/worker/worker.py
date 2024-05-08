@@ -133,10 +133,12 @@ class Worker(WorkerBase):
         # Profile the memory usage of the model and get the maximum number of
         # cache blocks that can be allocated with the remaining free memory.
         torch.cuda.empty_cache()
+        print("I found you")
 
         # Execute a forward pass with dummy inputs to profile the memory usage
         # of the model.
-        self.model_runner.profile_run()
+        # self.model_runner.profile_run()
+        print("I missed you")
 
         # Calculate the number of blocks that can be allocated with the
         # profiled peak memory.
@@ -155,6 +157,17 @@ class Worker(WorkerBase):
              peak_memory) // cache_block_size)
         num_cpu_blocks = int(self.cache_config.swap_space_bytes //
                              cache_block_size)
+        print(f"CCCCCCcache_block_size: {cache_block_size}")
+        print(f"total_gpu_memory: {total_gpu_memory}")
+        print(f"gpu_memory_utilization: {self.cache_config.gpu_memory_utilization}")
+        print(f"self.init_gpu_memory: {self.init_gpu_memory}")
+        print(f"total_gpu_memory * self.cache_config.gpu_memory_utilization: {total_gpu_memory * self.cache_config.gpu_memory_utilization}")
+        print(f"free_gpu_memory: {free_gpu_memory}")
+        print(f"peak_memory: {peak_memory}")
+        print(f"swap_space_bytes: {self.cache_config.swap_space_bytes}")
+        print(f"num_gpu_blocks: {num_gpu_blocks}")
+        print(f"num_cpu_blocks: {num_cpu_blocks}")
+        # This is only for KV blocks for management.
         num_gpu_blocks = max(num_gpu_blocks, 0)
         num_cpu_blocks = max(num_cpu_blocks, 0)
         if self.model_runner.lora_manager:
@@ -177,7 +190,7 @@ class Worker(WorkerBase):
         self.cache_config.num_cpu_blocks = num_cpu_blocks
 
         self._init_cache_engine()
-        self._warm_up_model()
+        #self._warm_up_model()
 
     def _init_cache_engine(self):
         assert self.cache_config.num_gpu_blocks is not None
@@ -187,11 +200,13 @@ class Worker(WorkerBase):
         self.model_runner.set_block_size(self.cache_engine.block_size)
 
     def _warm_up_model(self) -> None:
+        print("WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWarm up model")
         if not self.model_config.enforce_eager:
             self.model_runner.capture_model(self.gpu_cache)
         # Reset the seed to ensure that the random state is not affected by
         # the model initialization and profiling.
         set_random_seed(self.model_config.seed)
+        print("I am done")
 
     def cache_swap(
         self,
@@ -212,7 +227,7 @@ class Worker(WorkerBase):
         self,
         execute_model_req: Optional[ExecuteModelRequest] = None
     ) -> List[SamplerOutput]:
-
+        print("worker execute_model started")
         if execute_model_req is None:
             seq_group_metadata_list = None
         else:
@@ -222,6 +237,7 @@ class Worker(WorkerBase):
         blocks_to_swap_out: torch.Tensor
         blocks_to_copy: torch.Tensor
         if self.is_driver_worker:
+            print("worker step 2")
             assert seq_group_metadata_list is not None
             assert execute_model_req is not None
             num_seq_groups = len(seq_group_metadata_list)
@@ -249,18 +265,35 @@ class Worker(WorkerBase):
             }
             broadcast_tensor_dict(data, src=0)
         else:
+            print("worker step 3")
             data = broadcast_tensor_dict(src=0)
             num_seq_groups = data["num_seq_groups"]
             blocks_to_swap_in = data["blocks_to_swap_in"]
             blocks_to_swap_out = data["blocks_to_swap_out"]
             blocks_to_copy = data["blocks_to_copy"]
 
+        print("worker step 4")
+        print(len(self.gpu_cache))
+        if len(self.gpu_cache)>0:
+            if self.gpu_cache[0] is None:
+                print("FFFFFFF")
+            else:
+                print(self.gpu_cache[0])
         self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy)
 
         # If there is no input, we don't need to execute the model.
         if num_seq_groups == 0:
             return []
 
+        print("worker step 5")
+        print(len(self.gpu_cache))
+
+        if len(self.gpu_cache)>0:
+            if self.gpu_cache[0] is None:
+                print("FFFFFFF")
+            else:
+                print(self.gpu_cache[0])
+        # Add the redisual and outlier matrix here for executing model.
         output = self.model_runner.execute_model(seq_group_metadata_list,
                                                  self.gpu_cache)
 

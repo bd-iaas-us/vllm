@@ -637,6 +637,9 @@ class ModelRunner:
                 multi_modal_input,
                 slot_mapping,
             ) = self._prepare_prompt(prefill_reqs)
+            print("MMMMMMMModel Runner")
+            print(input_tokens)
+            print(input_positions)
             (
                 decode_input_tokens,
                 decode_input_positions,
@@ -781,27 +784,37 @@ class ModelRunner:
         seq_group_metadata_list: List[SequenceGroupMetadata],
         kv_caches: List[torch.Tensor],
     ) -> Optional[SamplerOutput]:
+        print("execute_model function started")
         (input_tokens, input_positions, attn_metadata, sampling_metadata,
          lora_requests, lora_mapping, multi_modal_input
          ) = self.prepare_input_tensors(seq_group_metadata_list)
-
+        print("execute_model step 2")
         if self.lora_config:
             self.set_active_loras(lora_requests, lora_mapping)
 
         # Currently cuda graph is only supported by the decode phase.
         prefill_meta = attn_metadata.prefill_metadata
         decode_meta = attn_metadata.decode_metadata
-        if prefill_meta is None and decode_meta.use_cuda_graph:
-            graph_batch_size = input_tokens.shape[0]
-            model_executable = self.graph_runners[graph_batch_size]
-        else:
-            model_executable = self.model
+        print("execute_model step 3")
+        # if prefill_meta is None and decode_meta.use_cuda_graph:
+        #     graph_batch_size = input_tokens.shape[0]
+        #     model_executable = self.graph_runners[graph_batch_size]
+        # else:
+        model_executable = self.model
+        print("execute_model step 4")
         execute_model_kwargs = {
             "input_ids": input_tokens,
             "positions": input_positions,
             "kv_caches": kv_caches,
             "attn_metadata": attn_metadata,
         }
+        print("Model execution started")
+        print(len(kv_caches))
+        if len(kv_caches) > 0:
+            if kv_caches[0] is None:
+                print("NNNNNNone")
+            else:
+                print("YYYYYYes")
         if self.vision_language_config:
             execute_model_kwargs.update({"image_input": multi_modal_input})
         hidden_states = model_executable(**execute_model_kwargs)

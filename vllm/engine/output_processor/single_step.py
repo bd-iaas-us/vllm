@@ -53,6 +53,7 @@ class SingleStepOutputProcessor(SequenceGroupOutputProcessor):
         """
         assert (len(outputs) == 1
                 ), f"{type(self)} does not support multiple outputs per step"
+        print("SSSSSingle Step")
         return self._process_sequence_group_outputs(sequence_group, outputs[0])
 
     def process_prompt_logprob(self, seq_group: SequenceGroup,
@@ -72,6 +73,7 @@ class SingleStepOutputProcessor(SequenceGroupOutputProcessor):
 
     def _process_sequence_group_outputs(self, seq_group: SequenceGroup,
                                         outputs: SequenceGroupOutput) -> None:
+        print(f"Process output single step: num_free_gpu {self.scheduler.block_manager.get_num_free_gpu_blocks()}")
         # Process samples
         samples = outputs.samples
         parent_seqs = seq_group.get_seqs(status=SequenceStatus.RUNNING)
@@ -101,6 +103,7 @@ class SingleStepOutputProcessor(SequenceGroupOutputProcessor):
             for child_sample in child_samples[:-1]:
                 new_child_seq_id: int = next(self.seq_counter)
                 child = parent.fork(new_child_seq_id)
+                # just this append_token_id appends the new token, which incurs possibly more blocks
                 child.append_token_id(child_sample.output_token,
                                       child_sample.logprobs)
                 child_seqs.append((child, parent))
@@ -108,6 +111,7 @@ class SingleStepOutputProcessor(SequenceGroupOutputProcessor):
             # We reuse the parent sequence here to reduce redundant memory
             # copies, especially when using non-beam search sampling methods.
             last_child_sample = child_samples[-1]
+            # just this append_token_id appends the new token, which incurs possibly more blocks
             parent.append_token_id(last_child_sample.output_token,
                                    last_child_sample.logprobs)
             child_seqs.append((parent, parent))
@@ -238,6 +242,7 @@ class SingleStepOutputProcessor(SequenceGroupOutputProcessor):
                 # iteration
                 seq_group.remove(seq.seq_id)
                 self.scheduler.free_seq(seq)
+        print(f"Process output single step: num_free_gpu {self.scheduler.block_manager.get_num_free_gpu_blocks()}")
 
     def _check_beam_search_early_stopping(
         self,

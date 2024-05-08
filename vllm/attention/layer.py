@@ -16,6 +16,7 @@ class Attention(nn.Module):
     can either contain prompt tokens or generation tokens.
     The class does the following:
 
+    This is important.
     1. Store the input key and value tensors in the KV cache.
     2. Perform (multi-head/multi-query/grouped-query) attention.
     3. Return the output tensor.

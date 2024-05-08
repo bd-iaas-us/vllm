@@ -284,6 +284,7 @@ class Sequence:
                                                num_empty_slots])
             cursor += num_empty_slots
 
+    # This is important.
     def append_token_id(
         self,
         token_id: int,

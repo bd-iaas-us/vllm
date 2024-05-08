@@ -277,6 +277,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
             return AllocStatus.LATER
 
     def allocate(self, seq_group: SequenceGroup) -> None:
+        print("IIIIII am at allocate")
         # NOTE: Here we assume that all sequences in the group have the same
         # prompt.
         seq = seq_group.get_seqs(status=SequenceStatus.WAITING)[0]
@@ -302,6 +303,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
             block_table.append(block)
 
         # Assign the block table for each sequence.
+        # This is important.
         for seq in seq_group.get_seqs(status=SequenceStatus.WAITING):
             self.block_tables[seq.seq_id] = block_table.copy()
 
@@ -323,6 +325,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         last_block: PhysicalTokenBlock,
     ) -> PhysicalTokenBlock:
         assert self.enable_caching
+        print("IIIIIIIIII am _promote_last_block")
 
         # Compute a new hash for the block so that it can be shared by other
         # Sequences
@@ -358,6 +361,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         self,
         seq: Sequence,
     ) -> PhysicalTokenBlock:
+        print("IIIIII am at _allocate_last_physical_block")
         # Called before a new block is appended.
         # This is in charge of allocating a new physical block (to be appended).
 
@@ -381,7 +385,15 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         if block_hash is None:
             assert new_block.ref_count == 1
         return new_block
-
+    
+    # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
+    def create_new_slots(self, seq: Sequence) -> Dict[int, List[int]]:
+        block_table = self.block_tables[seq.seq_id]
+        # go through the block_table to see if block.ref_count == 1
+        # if 1, self.gpu_allocator.free(block) to free the block
+        # Update the block table for this new KV cache slots.
+        pass
+    
     def append_slots(
         self,
         seq: Sequence,

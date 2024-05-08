@@ -193,6 +193,13 @@ class EngineArgs:
             'version greater than 11.8. On ROCm (AMD GPU), FP8_E4M3 is instead '
             'supported for common inference criteria.')
         parser.add_argument(
+            '--sparse-kv-cache-type',
+            type=str,
+            choices=['auto', 'gear'],
+            default=EngineArgs.sparse_kv_cache_type,
+            help='Sparse kv cache storage type. If "auto", will not use any sparse kv cache.'
+        )
+        parser.add_argument(
             '--quantization-param-path',
             type=nullable_str,
             default=None,

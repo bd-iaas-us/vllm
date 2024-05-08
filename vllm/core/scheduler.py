@@ -415,6 +415,9 @@ class Scheduler:
                 break
 
             running_queue.popleft()
+            # Add a condition check in while loop based on the newly created KV cache to see if there is enough slots or not.
+            # if use sparse-kv-cache flag and there is i%n==0 step.
+            # We could consider reserve some KV blocks for contain these blocks.
             while not self._can_append_slots(seq_group):
                 budget.subtract_num_batched_tokens(seq_group.request_id,
                                                    num_running_tokens)
@@ -444,7 +447,10 @@ class Scheduler:
                         swapped_out.append(seq_group)
                     break
             else:
+                print(f"append slot for {seq_group}")
+                print(f"num_free_gpu get_num_free_gpu_blocks {self.block_manager.get_num_free_gpu_blocks()}")
                 self._append_slots(seq_group, blocks_to_copy)
+                print(f"num_free_gpu get_num_free_gpu_blocks {self.block_manager.get_num_free_gpu_blocks()}")
                 is_prefill = seq_group.is_prefill()
                 if is_prefill:
                     prefill_seq_groups.append(
@@ -565,7 +571,9 @@ class Scheduler:
                 curr_loras.add(lora_int_id)
             swapped_queue.popleft()
             self._swap_in(seq_group, blocks_to_swap_in)
+            print(f"num_free_gpu get_num_free_gpu_blocks swapped {self.block_manager.get_num_free_gpu_blocks()}")
             self._append_slots(seq_group, blocks_to_copy)
+            print(f"num_free_gpu get_num_free_gpu_blocks swapped {self.block_manager.get_num_free_gpu_blocks()}")
             is_prefill = seq_group.is_prefill()
             if is_prefill:
                 prefill_seq_groups.append(
@@ -1026,8 +1034,15 @@ class Scheduler:
         num_lookahead_slots = self._get_num_lookahead_slots(is_prefill=False)
 
         for seq in seq_group.get_seqs(status=SequenceStatus.RUNNING):
+            # If use sparse-kv-cache flag and there is i%n==0 step.
+            # Get the original KV blocks
+            # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
             cows = self.block_manager.append_slots(seq, num_lookahead_slots)
+            # This is important.
             blocks_to_copy.extend(cows)
+        
+        # copy the KV blocks from the original KV cache to the new KV cache with the attention score or other tokens priority.
+        # Add a new ops method to copy all the KV cache from original to the new one.
 
     def _preempt(
         self,

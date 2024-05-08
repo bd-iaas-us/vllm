@@ -98,8 +98,16 @@ class OPTAttention(nn.Module):
     ) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.chunk(chunks=3, dim=-1)
+        # temp = None
+        # if kv_cache is not None:
+        #     temp = kv_cache.clone()
         attn_output = self.attn(q, k, v, kv_cache, attn_metadata)
+        # if temp is not None:
+        #     print("BBBBBBBBBBBBB")
+        #     print(torch.equal(temp, kv_cache))
+        #     print("BBBBBBBBBBBBBAA")
         output, _ = self.out_proj(attn_output)
+        print("I am in OPT")
         return output
 
 
@@ -243,9 +251,20 @@ class OPTDecoder(nn.Module):
             inputs_embeds, _ = self.project_in(inputs_embeds)
         hidden_states = inputs_embeds + pos_embeds
 
+        print(len(kv_caches))
         for i in range(len(self.layers)):
             layer = self.layers[i]
+            # print("TTTTTTTTTTTTTTTTTTT")
+            # temp = None
+            # if kv_caches[i] is not None and i == 0:
+            #     print(kv_caches[i].shape)
+            #     temp = torch.clone(kv_caches[i])
+            # print("TTTTTTTTTTTTTTTTTTTWWWW")
             hidden_states = layer(hidden_states, kv_caches[i], attn_metadata)
+            # print("UUUUUUUUUUUUUUUUUUUUUU")
+            # if temp is not None:
+            #     print(torch.equal(temp, kv_caches[i]))
+            # print("UUUUUUUUUUUUUUUUUUUUUUAAAAAAA")
 
         if self.final_layer_norm is not None:
             hidden_states = self.final_layer_norm(hidden_states)

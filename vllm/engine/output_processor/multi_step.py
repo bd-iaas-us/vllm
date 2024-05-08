@@ -69,6 +69,7 @@ class MultiStepOutputProcessor(SequenceGroupOutputProcessor):
         including freeing finished sequences. It also handles cases where there
         are tokens emitted after the EOS token.
         """
+        print("MMMMMMMultistep")
         seqs = sequence_group.get_seqs(status=SequenceStatus.RUNNING)
 
         assert seqs, "expected running sequences"

@@ -174,10 +174,32 @@ __global__ void reshape_and_cache_kernel(
   const int64_t block_offset = slot_idx % block_size;
 
   const int n = num_heads * head_size;
+  // printf("Cache kernel result\n");
+  // printf("num_heads is %d\n", num_heads);
+  // printf("head_size is %d\n", head_size);
+  // printf("block_size is %d\n", block_size);
+  // printf("block_idx is %ld\n", block_idx);
+  // printf("block_offset is %ld\n", block_offset);
+  // printf("n is %ld\n", n);
+  // printf("initial i is %d\n", threadIdx.x);
+  // printf("Step is %d\n", blockDim.x);
+  int k = 0;
+  printf("token_idx is %ld\n", token_idx);
   for (int i = threadIdx.x; i < n; i += blockDim.x) {
     const int64_t src_key_idx = token_idx * key_stride + i;
     const int64_t src_value_idx = token_idx * value_stride + i;
 
+    // if (k == 0) {
+    //   printf("token_idx is %ld\n", token_idx);
+    //   printf("key_stride is %ld\n", key_stride);
+    //   printf("i is %d\n", i);
+    //   printf("src_key_idx is %ld\n", src_key_idx);
+
+    //   printf("token_idx is %ld\n", token_idx);
+    //   printf("value_stride is %ld\n", value_stride);
+    //   printf("i is %d\n", i);
+    //   printf("src_value_idx is %ld\n", src_value_idx);
+    // }
     const int head_idx = i / head_size;
     const int head_offset = i % head_size;
     const int x_idx = head_offset / x;
@@ -194,6 +216,29 @@ __global__ void reshape_and_cache_kernel(
                                   + block_offset;
     scalar_t tgt_key = key[src_key_idx];
     scalar_t tgt_value = value[src_value_idx];
+    // if (k == 0) {
+    //   printf("head_size is %d\n", head_size);
+    //   printf("head_idx is %d\n", head_idx);
+    //   printf("head_offset is %d\n", head_offset);
+    //   printf("x is %d\n", x);
+    //   printf("x_idx is %d\n", x_idx);
+    //   printf("x_offset is %d\n", x_offset);
+
+    //   // printf("block_idx * num_heads * (head_size / x) * block_size * x is %lld\n", block_idx * num_heads * (head_size / x) * block_size * x);
+    //   // printf("head_idx * (head_size / x) * block_size * x is %lld\n", head_idx * (head_size / x) * block_size * x);
+    //   // printf("x_idx * block_size * x is %lld\n", x_idx * block_size * x);
+    //   // printf("block_offset * x is %lld\n", block_offset * x);
+    //   // printf("x_offset * x is %lld\n", x_offset);
+
+
+    //   // printf("block_idx * num_heads * head_size * block_size is %lld\n", block_idx * num_heads * head_size * block_size);
+    //   // printf("head_idx * head_size * block_size is %lld\n", head_idx * head_size * block_size);
+    //   // printf("head_offset * block_size is %lld\n", head_offset * block_size);
+    //   printf("block_offset is %ld\n", block_offset);
+
+      printf("tgt_key_idx is %lld\n", tgt_key_idx);
+      printf("tgt_value_idx is %lld\n", tgt_value_idx);
+    // }
     if constexpr (is_fp8_kv_cache) {
 #if defined(ENABLE_FP8_E5M2)
       key_cache[tgt_key_idx] = fp8_e5m2_unscaled::vec_conversion<uint8_t, scalar_t>(tgt_key);
@@ -205,10 +250,20 @@ __global__ void reshape_and_cache_kernel(
       assert(false);
 #endif
     } else {
+      // This is important
+      ///////// Update
+      // q = 0
+      // alpha =  round(1/(1+ exp(-tgt_key)))
+      // sigma = 1/(1+ exp(-q))
+      ///////// Update 
       key_cache[tgt_key_idx] = tgt_key;
       value_cache[tgt_value_idx] = tgt_value;
     }
+    // Design update: If compression, compress the KV cache result from the normal one to the compressed ones.
+    // If eviction, nothing.
+    k += 1;
   }
+  printf("Cache kernel result done\n");
 }
 
 template<typename scalar_t>

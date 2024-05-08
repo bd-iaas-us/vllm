@@ -199,6 +199,7 @@ __device__ void paged_attention_kernel(
   // Each thread group in a warp fetches a key from the block, and computes
   // dot product with the query.
   const int* block_table = block_tables + seq_idx * max_num_blocks_per_seq;
+  // This block part is to calculate q*k from line 202 to line 263.
   for (int block_idx = start_block_idx + warp_idx; block_idx < end_block_idx; block_idx += NUM_WARPS) {
     // NOTE(woosuk): The block number is stored in int32. However, we cast it to int64
     // because int32 can lead to overflow when this variable is multiplied by large numbers
@@ -239,6 +240,8 @@ __device__ void paged_attention_kernel(
         } else {
           k_vecs[j] = *reinterpret_cast<const K_vec*>(k_ptr + offset1 * BLOCK_SIZE * x + offset2);
         }
+        // Design update: If compression, decompress the KV cache result to the normal one that could be used to achieve dot product calculation.
+        // If eviction, nothing.
       }
 
       // Compute dot product.
@@ -330,6 +333,7 @@ __device__ void paged_attention_kernel(
 
   scalar_t zero_value;
   zero(zero_value);
+  // This block part is to calculate q*k from line 338 to line 387.
   for (int block_idx = start_block_idx + warp_idx; block_idx < end_block_idx; block_idx += NUM_WARPS) {
     // NOTE(woosuk): The block number is stored in int32. However, we cast it to int64
     // because int32 can lead to overflow when this variable is multiplied by large numbers
@@ -364,6 +368,8 @@ __device__ void paged_attention_kernel(
         } else {
           v_vec = *reinterpret_cast<const V_vec*>(v_ptr + offset);
         }
+        // Design update: If compression, decompress the KV cache result to the normal one that could be used to achieve dot product calculation.
+        // If eviction, nothing.
         if (block_idx == num_seq_blocks - 1) {
           // NOTE(woosuk): When v_vec contains the tokens that are out of the context,
           // we should explicitly zero out the values since they may contain NaNs.
@@ -375,6 +381,7 @@ __device__ void paged_attention_kernel(
           }
         }
         accs[i] += dot(logits_vec, v_vec);
+        // Design update: Add the residual and outlier matrix here.
       }
     }
   }

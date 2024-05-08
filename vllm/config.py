@@ -334,6 +334,7 @@ class CacheConfig:
         gpu_memory_utilization: float,
         swap_space: int,
         cache_dtype: str,
+        #sparse_cache_type: str,
         num_gpu_blocks_override: Optional[int] = None,
         sliding_window: Optional[int] = None,
         enable_prefix_caching: bool = False,
@@ -343,10 +344,13 @@ class CacheConfig:
         self.swap_space_bytes = swap_space * _GB
         self.num_gpu_blocks_override = num_gpu_blocks_override
         self.cache_dtype = cache_dtype
+        # self.sparse_cache_type = sparse_cache_type
         self.sliding_window = sliding_window
         self.enable_prefix_caching = enable_prefix_caching
         self._verify_args()
         self._verify_cache_dtype()
+        # self._verify_cache_sparse_type()
+        print(f"self.block_size: {self.block_size}")
 
         # Will be set after profiling.
         self.num_gpu_blocks = None
@@ -377,6 +381,15 @@ class CacheConfig:
         else:
             raise ValueError(f"Unknown kv cache dtype: {self.cache_dtype}")
 
+    def _verify_cache_sparse_type(self) -> None:
+        if self.sparse_cache_type == "auto":
+            pass
+        elif self.sparse_cache_type == "gear":
+            # Ensure supporting both CUDA and ROCM.
+            pass
+        else:
+            raise ValueError(f"Unknown sparse kv cache type: {self.sparse_cache_type}")
+        
     def verify_with_parallel_config(
         self,
         parallel_config: "ParallelConfig",

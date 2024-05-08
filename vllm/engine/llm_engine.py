@@ -170,6 +170,7 @@ class LLMEngine:
         )
 
         self._initialize_kv_caches()
+        print("Checkpoint 1")
 
         # If usage stat is enabled, collect relevant info.
         if is_usage_stats_enabled():
@@ -211,11 +212,13 @@ class LLMEngine:
             # different process.
             self.tokenizer.ping()
 
+        print("Checkpoint 2")
         # Create the scheduler.
         # NOTE: the cache_config here have been updated with the numbers of
         # GPU and CPU blocks, which are profiled in the distributed executor.
         self.scheduler = Scheduler(scheduler_config, cache_config, lora_config)
 
+        print("Checkpoint 3")
         # Metric Logging.
         if self.log_stats:
             self.stat_logger = StatLogger(
@@ -224,6 +227,7 @@ class LLMEngine:
                 max_model_len=self.model_config.max_model_len)
             self.stat_logger.info("cache_config", self.cache_config)
 
+        print("Checkpoint 4")
         # Create sequence output processor, e.g. for beam search or
         # speculative decoding.
         self.output_processor = (
@@ -238,6 +242,14 @@ class LLMEngine:
                     self.get_tokenizer_for_seq,
                 ),
             ))
+
+        print(f"get_sliding_window: {self.model_config.get_sliding_window()}")
+        print(f"get_vocab_size: {self.model_config.get_vocab_size()}")
+        print(f"get_hidden_size: {self.model_config.get_hidden_size()}")
+        print(f"get_head_size: {self.model_config.get_head_size()}")
+        print(f"get_total_num_kv_heads: {self.model_config.get_total_num_kv_heads()}")
+        print(f"get_num_kv_heads: {self.model_config.get_num_kv_heads(self.parallel_config)}")
+        print(f"get_num_layers: {self.model_config.get_num_layers(self.parallel_config)}")
 
     def _initialize_kv_caches(self) -> None:
         """Initialize the KV cache in the worker(s).
@@ -581,7 +593,11 @@ class LLMEngine:
             >>>     if not (engine.has_unfinished_requests() or example_inputs):
             >>>         break
         """
+        print("llm engine step started")
+        # This is important.
         seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
+        print("llm engine step started 2")
+        print(f"LLM Engine: num_free_gpu {self.scheduler.block_manager.get_num_free_gpu_blocks()}")
 
         if not scheduler_outputs.is_empty():
             execute_model_req = ExecuteModelRequest(
@@ -592,18 +608,23 @@ class LLMEngine:
                 num_lookahead_slots=scheduler_outputs.num_lookahead_slots,
                 running_queue_size=scheduler_outputs.running_queue_size,
             )
+            print("llm engine step started 3")
             output = self.model_executor.execute_model(
                 execute_model_req=execute_model_req)
+            print("llm engine step started 4")
         else:
             output = []
+        print(f"LLM Engine: num_free_gpu {self.scheduler.block_manager.get_num_free_gpu_blocks()}")
 
         request_outputs = self._process_model_outputs(
             output, scheduler_outputs.scheduled_seq_groups,
             scheduler_outputs.ignored_seq_groups, seq_group_metadata_list)
 
+        print(f"LLM Engine: num_free_gpu {self.scheduler.block_manager.get_num_free_gpu_blocks()}")
         # Log stats.
         self.do_log_stats(scheduler_outputs, output)
-
+        print(self._get_stats(scheduler_outputs))
+        print(request_outputs)
         return request_outputs
 
     def do_log_stats(
@@ -638,6 +659,7 @@ class LLMEngine:
         # KV Cache Usage in %
         num_total_gpu = self.cache_config.num_gpu_blocks
         num_free_gpu = self.scheduler.block_manager.get_num_free_gpu_blocks()
+        print(f"num_free_gpu: {num_free_gpu}")
         gpu_cache_usage_sys = 1.0 - (num_free_gpu / num_total_gpu)
 
         num_total_cpu = self.cache_config.num_cpu_blocks

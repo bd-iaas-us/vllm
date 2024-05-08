@@ -192,19 +192,36 @@ class XFormersImpl(AttentionImpl):
         query = query.view(-1, self.num_heads, self.head_size)
         key = key.view(-1, self.num_kv_heads, self.head_size)
         value = value.view(-1, self.num_kv_heads, self.head_size)
+        print("LLLLLLLLLLLLLLLLLLLL")
+        print(query.shape)
+        print(key.shape)
+        print(value.shape)
+        print("LLLLLLLLLLLLLLLLLLLLPP")
+        if kv_cache is not None:
+            print("VVVVVVVVVVVV")
+            print(kv_cache.shape)
 
         if kv_cache is not None:
             key_cache, value_cache = PagedAttention.split_kv_cache(
                 kv_cache, self.num_kv_heads, self.head_size)
+            print("Split Xformer")
+            print(key_cache.shape)
+            print(value_cache.shape)
+            print(key.shape)
+            print(value.shape)
 
             # Reshape the input keys and values and store them in the cache.
             # If kv_cache is not provided, the new key and value tensors are
             # not cached. This happens during the initial memory profiling run.
+            # This is to write the key and value to the key_cache and value_cache.
+            # Design update: atten_metadata.kv_cache_dtype passes fp8 to the kernel functions, we could use similar
+            # idea, by passing atten_metadata about the different compression method.
             PagedAttention.write_to_paged_cache(key, value, key_cache,
                                                 value_cache,
                                                 attn_metadata.slot_mapping,
                                                 attn_metadata.kv_cache_dtype,
                                                 kv_scale)
+            # Design update: Need to add the redisual and outlier value to the matrix.
 
         num_prefill_tokens = attn_metadata.num_prefill_tokens
         num_decode_tokens = attn_metadata.num_decode_tokens
@@ -218,25 +235,42 @@ class XFormersImpl(AttentionImpl):
         query = query[:num_prefill_tokens]
         key = key[:num_prefill_tokens]
         value = value[:num_prefill_tokens]
+        print("MMMMMMMMMMMMMMMMM")
+        print(query.shape)
+        print(key.shape)
+        print(value.shape)
+        print("MMMMMMMMMMMMMMMMMNNNN")
 
         assert query.shape[0] == num_prefill_tokens
         assert decode_query.shape[0] == num_decode_tokens
 
         if prefill_meta := attn_metadata.prefill_metadata:
+            print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXAAAAAAA")
             # Prompt run.
             if kv_cache is None or prefill_meta.block_tables.numel() == 0:
                 # normal attention.
                 # block tables are empty if the prompt does not have a cached
                 # prefix.
+                print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXBBBBBB")
+                # Design update: update here
                 out = self._run_memory_efficient_xformers_forward(
                     query, key, value, prefill_meta)
                 assert out.shape == output[:num_prefill_tokens].shape
                 output[:num_prefill_tokens] = out
+                print("TTTTTTTTTTTTT")
+                print(out.shape)
+                print(output.shape)
+                if kv_cache is not None:
+                    print("KKKKKKKK")
+                    print(kv_cache.shape)
             else:
                 # prefix-enabled attention
                 # TODO(Hai) this triton kernel has regression issue (broke) to
                 # deal with different data types between KV and FP8 KV cache,
                 # to be addressed separately.
+                # temp_key = torch.clone(key_cache)
+                # temp_value = torch.clone(value_cache)
+                # Design update: Do we need to update here?
                 out = PagedAttention.forward_prefix(
                     query,
                     key,
@@ -251,10 +285,20 @@ class XFormersImpl(AttentionImpl):
                     self.alibi_slopes,
                     self.sliding_window,
                 )
+                print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXMMMMMMMM")
+                print(key_cache.shape)
+                print(value_cache.shape)
+                #print(torch.equal(temp_key, key_cache))
+                #print(torch.equal(temp_value, value_cache))
                 assert output[:num_prefill_tokens].shape == out.shape
                 output[:num_prefill_tokens] = out
 
+        print("I am in Xformers")
         if decode_meta := attn_metadata.decode_metadata:
+            # temp_key = torch.clone(key_cache)
+            # temp_value = torch.clone(value_cache)
+            # Design update: attn_metadata.kv_cache_dtype passes fp8 to the kernel functions, we could use similar
+            # idea, by passing attn_metadata about the different compression method.
             output[num_prefill_tokens:] = PagedAttention.forward_decode(
                 decode_query,
                 key_cache,
@@ -268,9 +312,17 @@ class XFormersImpl(AttentionImpl):
                 self.alibi_slopes,
                 kv_scale,
             )
+            print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXYYYYYYYY")
+            print(key_cache.shape)
+            print(value_cache.shape)
+            # print(torch.equal(temp_key, key_cache))
+            # print(torch.equal(temp_value, value_cache))
 
         # Reshape the output tensor.
-        return output.view(-1, self.num_heads * self.head_size)
+        temp = output.view(-1, self.num_heads * self.head_size)
+        print(temp.shape)
+        print("EEEEEEEEnd")
+        return temp
 
     def _run_memory_efficient_xformers_forward(
         self,
@@ -307,10 +359,14 @@ class XFormersImpl(AttentionImpl):
                           None, :].expand(value.shape[0], self.num_kv_heads,
                                           self.num_queries_per_kv,
                                           value.shape[-1])
+        print("RRRRRRRRRRRRRRRRun")
+        print(key.shape)
+        print(value.shape)
         # Set attention bias if not provided. This typically happens at
         # the very attention layer of every iteration.
         # FIXME(woosuk): This is a hack.
         if attn_metadata.attn_bias is None:
+            print("1111111")
             if self.alibi_slopes is None:
                 attn_bias = BlockDiagonalCausalMask.from_seqlens(
                     attn_metadata.seq_lens)
@@ -326,11 +382,16 @@ class XFormersImpl(AttentionImpl):
         # No alibi slopes.
         # TODO(woosuk): Too many view operations. Let's try to reduce
         # them in the future for code readability.
+        print("222222")
         if self.alibi_slopes is None:
+            print("33333")
             # Add the batch dimension.
             query = query.unsqueeze(0)
             key = key.unsqueeze(0)
             value = value.unsqueeze(0)
+            print(query.shape)
+            print(key.shape)
+            print(value.shape)
             out = xops.memory_efficient_attention_forward(
                 query,
                 key,
@@ -340,6 +401,7 @@ class XFormersImpl(AttentionImpl):
                 scale=self.scale)
             return out.view_as(original_query)
 
+        print("4444444")
         # Attention with alibi slopes.
         # FIXME(woosuk): Because xformers does not support dynamic sequence
         # lengths with custom attention bias, we process each prompt one by
@@ -347,6 +409,7 @@ class XFormersImpl(AttentionImpl):
         output = torch.empty_like(original_query)
         start = 0
         for i, seq_len in enumerate(attn_metadata.seq_lens):
+            print("5555555")
             end = start + seq_len
             out = xops.memory_efficient_attention_forward(
                 query[None, start:end],
@@ -358,6 +421,7 @@ class XFormersImpl(AttentionImpl):
             # TODO(woosuk): Unnecessary copy. Optimize.
             output[start:end].copy_(out.view_as(original_query[start:end]))
             start += seq_len
+        print("666666")
         return output
 
 

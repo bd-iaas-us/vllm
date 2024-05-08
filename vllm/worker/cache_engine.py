@@ -42,6 +42,11 @@ class CacheEngine:
         else:
             self.dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
+        # if cache_config.sparse_cache_type == "auto":
+        #     pass
+        # else:
+        #     # parse the sparse KV cache
+        #     xxx
         # Get attention backend.
         self.attn_backend = get_attn_backend(model_config.dtype)
 
@@ -98,8 +103,14 @@ class CacheEngine:
         else:
             dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
         dtype_size = _get_dtype_size(dtype)
+        # sparse_cache_size = _get_sparse_cache_size(dtype, model_config.sparse_cache_type)
+        # return sparse_cache_size * total
         return dtype_size * total
 
 
 def _get_dtype_size(dtype: torch.dtype) -> int:
     return torch.tensor([], dtype=dtype).element_size()
+
+def _get_sparse_cache_size(dtype: torch.dtype) -> int:
+    # return the size of each sparse cache element. This part should incorporate the fp8 case for cache type.
+    return 0

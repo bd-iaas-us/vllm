@@ -253,6 +253,7 @@ class RayGPUExecutor(DistributedGPUExecutor):
             else:
                 ray_worker_outputs = ray.get(ray_worker_outputs)
 
+        print("Multi-head")
         return [driver_worker_output] + ray_worker_outputs
 
     def _compiled_ray_dag(self):

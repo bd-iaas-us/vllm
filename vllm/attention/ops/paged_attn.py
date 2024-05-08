@@ -77,6 +77,24 @@ class PagedAttention:
             kv_cache_dtype,
             kv_scale,
         )
+    
+    @staticmethod
+    def copy_to_paged_cache(
+        src_key_cache: torch.Tensor,
+        src_value_cache: torch.Tensor,
+        tgt_key_cache: torch.Tensor,
+        tgt_value_cache: torch.Tensor,
+        slot_mapping: torch.Tensor,
+        atten_score: torch.Tensor,
+    ) -> None:
+        ops.copy_to_cache(
+            src_key_cache,
+            src_value_cache,
+            tgt_key_cache,
+            tgt_value_cache,
+            slot_mapping.flatten(),
+            atten_score
+        )
 
     @staticmethod
     def forward_decode(
@@ -107,8 +125,14 @@ class PagedAttention:
         # For context len > 8192, use V2 kernel to avoid shared memory shortage.
         use_v1 = (max_seq_len <= 8192
                   and (max_num_partitions == 1 or num_seqs * num_heads > 512))
+        print("Shape")
+        print(key_cache.shape)
+        print(value_cache.shape)
         if use_v1:
             # Run PagedAttention V1.
+            print("I am V1")
+            #temp_key = torch.clone(key_cache)
+            #temp_value = torch.clone(value_cache)
             ops.paged_attention_v1(
                 output,
                 query,
@@ -124,7 +148,15 @@ class PagedAttention:
                 kv_cache_dtype,
                 kv_scale,
             )
+            print(key_cache.shape)
+            print(value_cache.shape)
+            print("PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP")
+            #print(torch.equal(temp_key, key_cache))
+            #print(torch.equal(temp_value, value_cache))
+            # print(key_cache)
+            # print(value_cache)
         else:
+            print("I am V2")
             # Run PagedAttention V2.
             assert _PARTITION_SIZE % block_size == 0
             tmp_output = torch.empty(
@@ -156,6 +188,8 @@ class PagedAttention:
                 kv_cache_dtype,
                 kv_scale,
             )
+            print(key_cache.shape)
+            print(value_cache.shape)
         return output
 
     @staticmethod
