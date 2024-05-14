@@ -32,6 +32,7 @@ Here is an example as of v0.4.0:
   "gpu_memory_utilization": 0.9,
   "quantization": null,
   "kv_cache_dtype": "auto",
+  "sparse_cache_type": "auto",
   "enable_lora": false,
   "enable_prefix_caching": false,
   "enforce_eager": false,

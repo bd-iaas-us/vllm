@@ -79,6 +79,24 @@ class PagedAttention:
         )
 
     @staticmethod
+    def copy_to_paged_cache(
+        src_key_cache: torch.Tensor,
+        src_value_cache: torch.Tensor,
+        tgt_key_cache: torch.Tensor,
+        tgt_value_cache: torch.Tensor,
+        slot_mapping: torch.Tensor,
+        atten_score: torch.Tensor,
+    ) -> None:
+        ops.copy_to_cache(
+            src_key_cache,
+            src_value_cache,
+            tgt_key_cache,
+            tgt_value_cache,
+            slot_mapping.flatten(),
+            atten_score
+        )
+
+    @staticmethod
     def forward_decode(
         query: torch.Tensor,
         key_cache: torch.Tensor,
@@ -91,6 +109,7 @@ class PagedAttention:
         scale: float,
         alibi_slopes: Optional[torch.Tensor],
         kv_scale: float,
+        sparse_cache_type: str,
     ) -> torch.Tensor:
         output = torch.empty_like(query)
 
@@ -123,6 +142,7 @@ class PagedAttention:
                 alibi_slopes,
                 kv_cache_dtype,
                 kv_scale,
+                sparse_cache_type,
             )
         else:
             # Run PagedAttention V2.
@@ -155,6 +175,7 @@ class PagedAttention:
                 alibi_slopes,
                 kv_cache_dtype,
                 kv_scale,
+                sparse_cache_type,
             )
         return output
 

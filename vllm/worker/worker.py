@@ -82,6 +82,7 @@ class Worker(WorkerBase):
             kv_cache_dtype=self.cache_config.cache_dtype,
             is_driver_worker=is_driver_worker,
             vision_language_config=vision_language_config,
+            sparse_cache_type=self.cache_config.sparse_cache_type,
         )
         # Uninitialized cache engine. Will be initialized by
         # initialize_cache.

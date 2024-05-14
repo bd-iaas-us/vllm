@@ -163,6 +163,31 @@ class BlockSpaceManagerV2(BlockSpaceManager):
             Device.GPU)
         return num_touched_blocks <= num_free_gpu_blocks
 
+    def can_append_slots_sparse_cache(
+        self, seq_group: SequenceGroup,
+        num_lookahead_slots: int = 0) -> bool:
+
+        new_physical_block_number = 0
+        for seq in seq_group.get_seqs():
+            new_physical_block_number += len(self.get_block_table(seq))
+
+        new_physical_block_number *= 0.2
+        num_touched_blocks = 0
+        for seq in seq_group.get_seqs(status=SequenceStatus.RUNNING):
+            block_table = self.block_tables[seq.seq_id]
+
+            num_touched_blocks += (
+                block_table.get_num_blocks_touched_by_append_slots(
+                    token_ids=block_table.get_unseen_token_ids(
+                        seq.get_token_ids()),
+                    num_lookahead_slots=num_lookahead_slots,
+                ))
+        
+        num_free_gpu_blocks = self.block_allocator.get_num_free_blocks(
+            Device.GPU)
+        return num_touched_blocks + new_physical_block_number <= num_free_gpu_blocks
+
+
     def append_slots(
         self,
         seq: Sequence,

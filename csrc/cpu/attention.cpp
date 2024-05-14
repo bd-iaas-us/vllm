@@ -419,7 +419,7 @@ void paged_attention_v1(torch::Tensor &out, torch::Tensor &query,
                         torch::Tensor &seq_lens, int block_size,
                         int max_seq_len,
                         const c10::optional<torch::Tensor> &alibi_slopes,
-                        const std::string &kv_cache_dtype, float kv_scale) {
+                        const std::string &kv_cache_dtype, float kv_scale, const std::string &sparse_cache_type) {
   TORCH_CHECK(kv_scale == 1.0f);
   VLLM_DISPATCH_FLOATING_TYPES(query.scalar_type(), "paged_attention_v1_impl",
                                [&] {
@@ -735,7 +735,7 @@ void paged_attention_v2(torch::Tensor &out, torch::Tensor &exp_sums,
                         torch::Tensor &seq_lens, int block_size,
                         int max_seq_len,
                         const c10::optional<torch::Tensor> &alibi_slopes,
-                        const std::string &kv_cache_dtype, float kv_scale) {
+                        const std::string &kv_cache_dtype, float kv_scale, const std::string &sparse_cache_type) {
   TORCH_CHECK(kv_scale == 1.0f);
   VLLM_DISPATCH_FLOATING_TYPES(query.scalar_type(), "paged_attention_v2_impl",
                                [&] {

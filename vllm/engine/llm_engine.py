@@ -108,8 +108,9 @@ class LLMEngine:
             "max_seq_len=%d, download_dir=%r, load_format=%s, "
             "tensor_parallel_size=%d, disable_custom_all_reduce=%s, "
             "quantization=%s, enforce_eager=%s, kv_cache_dtype=%s, "
-            "quantization_param_path=%s, device_config=%s, "
-            "decoding_config=%r, seed=%d, served_model_name=%s)",
+            "sparse_cache_type=%s, quantization_param_path=%s, "
+            "device_config=%s, decoding_config=%r, "
+            "seed=%d, served_model_name=%s)",
             vllm.__version__,
             model_config.model,
             speculative_config,
@@ -128,6 +129,7 @@ class LLMEngine:
             model_config.quantization,
             model_config.enforce_eager,
             cache_config.cache_dtype,
+            cache_config.sparse_cache_type,
             model_config.quantization_param_path,
             device_config.device,
             decoding_config,
@@ -198,6 +200,8 @@ class LLMEngine:
                     model_config.quantization,
                     "kv_cache_dtype":
                     cache_config.cache_dtype,
+                    "sparse_cache_type":
+                    cache_config.sparse_cache_type,
 
                     # Feature flags
                     "enable_lora":
@@ -686,6 +690,8 @@ class LLMEngine:
         # Log stats.
         self.do_log_stats(scheduler_outputs, output)
 
+        #pprint
+        #print(request_outputs)
         return request_outputs
 
     def do_log_stats(

@@ -334,6 +334,7 @@ class CacheConfig:
         cache_dtype: Data type for kv cache storage.
         num_gpu_blocks_override: Number of GPU blocks to use. This overrides the
             profiled num_gpu_blocks if specified. Does nothing if None.
+        sparse_cache_type: Sparse type for kv cache storage, for example H2O.
     """
 
     def __init__(
@@ -345,16 +346,19 @@ class CacheConfig:
         num_gpu_blocks_override: Optional[int] = None,
         sliding_window: Optional[int] = None,
         enable_prefix_caching: bool = False,
+        sparse_cache_type: Optional[str] = "auto",
     ) -> None:
         self.block_size = block_size
         self.gpu_memory_utilization = gpu_memory_utilization
         self.swap_space_bytes = swap_space * _GB
         self.num_gpu_blocks_override = num_gpu_blocks_override
         self.cache_dtype = cache_dtype
+        self.sparse_cache_type = sparse_cache_type
         self.sliding_window = sliding_window
         self.enable_prefix_caching = enable_prefix_caching
         self._verify_args()
         self._verify_cache_dtype()
+        self._verify_sparse_cache_type()
 
         # Will be set after profiling.
         self.num_gpu_blocks = None
@@ -384,6 +388,16 @@ class CacheConfig:
                 "is instead supported for common inference criteria.")
         else:
             raise ValueError(f"Unknown kv cache dtype: {self.cache_dtype}")
+    
+    def _verify_sparse_cache_type(self) -> None:
+        if self.sparse_cache_type == "auto":
+            pass
+        elif self.sparse_cache_type == "h2o":
+            logger.info(
+                "Using h2o for supporting sparse KV cache. It reduces the GPU "
+                "memory footprint and boosts the performance.")
+        else:
+            raise ValueError(f"Unknown sparse kv cache type: {self.sparse_cache_type}")
 
     def verify_with_parallel_config(
         self,

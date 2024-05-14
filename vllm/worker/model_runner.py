@@ -112,6 +112,7 @@ class ModelRunner:
         kv_cache_dtype: Optional[str] = "auto",
         is_driver_worker: bool = False,
         vision_language_config: Optional[VisionLanguageConfig] = None,
+        sparse_cache_type: Optional[str] = "auto",
     ):
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -127,6 +128,7 @@ class ModelRunner:
         self.pin_memory = is_pin_memory_available()
 
         self.kv_cache_dtype = kv_cache_dtype
+        self.sparse_cache_type = sparse_cache_type
         self.sliding_window = model_config.get_sliding_window()
         self.block_size = cache_config.block_size
         self.max_seq_len_to_capture = self.model_config.max_seq_len_to_capture
@@ -184,6 +186,7 @@ class ModelRunner:
             self.model = self.lora_manager.create_lora_manager(self.model)
 
         if self.kv_cache_dtype == "fp8" and is_hip():
+            # Temporarily nothing now.
             # Currently scaled KV cache is only enabled on ROCm
             if self.model_config.quantization_param_path is not None:
                 if callable(getattr(self.model, "load_kv_cache_scales", None)):
@@ -559,6 +562,8 @@ class ModelRunner:
             kv_cache_dtype = get_kv_cache_torch_dtype(self.kv_cache_dtype,
                                                       self.model_config.dtype)
 
+            # Temporarily nothing now.
+
             attn_metadata = self.attn_backend.make_metadata(
                 is_prompt=False,
                 use_cuda_graph=False,
@@ -572,7 +577,8 @@ class ModelRunner:
                     self.parallel_config),
                 head_dim=self.model_config.get_head_size(),
                 page_size=self.block_size,
-                data_type=kv_cache_dtype)
+                data_type=kv_cache_dtype,
+                sparse_cache_type=sparse_cache_type)
         else:
             attn_metadata = self.attn_backend.make_metadata(
                 is_prompt=False,
@@ -755,6 +761,7 @@ class ModelRunner:
             prefill_metadata=prefill_attn_metadata,
             decode_metadata=decode_attn_metadata,
             kv_cache_dtype=self.kv_cache_dtype,
+            sparse_cache_type=self.sparse_cache_type,
         )
 
         return (input_tokens, input_positions, attn_metadata,
@@ -973,6 +980,7 @@ class ModelRunner:
                     prefill_metadata=None,
                     decode_metadata=decode_metadata,
                     kv_cache_dtype=self.kv_cache_dtype,
+                    sparse_cache_type=self.sparse_cache_type,
                 )
 
                 if self.lora_config:

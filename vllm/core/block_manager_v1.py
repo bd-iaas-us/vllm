@@ -382,6 +382,34 @@ class BlockSpaceManagerV1(BlockSpaceManager):
             assert new_block.ref_count == 1
         return new_block
 
+    # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
+    def create_new_slots(self, seq: Sequence) -> List[Tuple[int, int]]:
+        # go through the block_table to see if block.ref_count == 1
+        # if 1, self.gpu_allocator.free(block) to free the block
+        block_table = self.block_tables[seq.seq_id]
+        new_block_number = math.ceil(len(seq.logical_token_blocks) * 0.2)
+        # Will reuse cause trouble??
+        # for i in range(new_block_number):
+        #     if (self.block_sliding_window
+        #             and len(block_table) >= self.block_sliding_window):
+        #         # reuse a block
+        #         block_table.append(block_table[len(block_table) %
+        #                                        self.block_sliding_window])
+        #     else:
+        #         # The sequence hash a new logical block.
+        #         # Allocate a new physical block.
+        #         new_block = self._allocate_last_physical_block(seq)
+        #         block_table.append(new_block)
+        #         return []
+        # for block in block_table:
+        #     block.ref_count -= 1
+        #     if block.ref_count == 0:
+        #         self.gpu_allocator.free(block)
+        # what about v2??
+        
+        # Update the block table for this new KV cache slots.
+        pass
+
     def append_slots(
         self,
         seq: Sequence,
@@ -451,6 +479,18 @@ class BlockSpaceManagerV1(BlockSpaceManager):
                 continue
             blocks.update(self.block_tables[seq.seq_id])
         return list(blocks)
+    
+    def can_append_slots_sparse_cache(
+        self, seq_group: SequenceGroup,
+        num_lookahead_slots: int = 0) -> bool:
+        assert (num_lookahead_slots == 0
+                ), "lookahead allocation not supported in BlockSpaceManagerV1"
+        new_physical_block_number = len(self._get_physical_blocks(seq_group)) * 0.2
+        # Simple heuristic: If there is at least one free block
+        # for each sequence, we can append.
+        num_free_gpu_blocks = self.gpu_allocator.get_num_free_blocks()
+        num_seqs = seq_group.num_seqs(status=SequenceStatus.RUNNING)
+        return num_seqs + new_physical_block_number <= num_free_gpu_blocks
 
     def can_swap_in(self,
                     seq_group: SequenceGroup,

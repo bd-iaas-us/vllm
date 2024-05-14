@@ -435,6 +435,7 @@ class SequenceGroup:
         self.multi_modal_data = multi_modal_data
         self.embeddings = embeddings
         self.pooling_params = pooling_params
+        self.n_times = -1
 
     @property
     def prompt(self) -> str:

@@ -354,6 +354,7 @@ def get_kv_cache_torch_dtype(
         torch_dtype = cache_dtype
     else:
         raise ValueError(f"Invalid kv cache dtype: {cache_dtype}")
+    # Temporary nothing now.
     return torch_dtype
 
 
@@ -402,6 +403,7 @@ def create_kv_caches_with_random(
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
 
+    # Temporary nothing now.
     torch_dtype = get_kv_cache_torch_dtype(cache_dtype, model_dtype)
 
     scale = head_size**-0.5

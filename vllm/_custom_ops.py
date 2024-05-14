@@ -45,11 +45,12 @@ def paged_attention_v1(
     alibi_slopes: Optional[torch.Tensor],
     kv_cache_dtype: str,
     kv_scale: float,
+    sparse_cache_type: str,
 ) -> None:
     vllm_ops.paged_attention_v1(out, query, key_cache, value_cache,
                                 num_kv_heads, scale, block_tables, seq_lens,
                                 block_size, max_seq_len, alibi_slopes,
-                                kv_cache_dtype, kv_scale)
+                                kv_cache_dtype, kv_scale, sparse_cache_type)
 
 
 def paged_attention_v2(
@@ -69,12 +70,13 @@ def paged_attention_v2(
     alibi_slopes: Optional[torch.Tensor],
     kv_cache_dtype: str,
     kv_scale: float,
+    sparse_cache_type: str,
 ) -> None:
     vllm_ops.paged_attention_v2(out, exp_sum, max_logits, tmp_out, query,
                                 key_cache, value_cache, num_kv_heads, scale,
                                 block_tables, seq_lens, block_size,
                                 max_seq_len, alibi_slopes, kv_cache_dtype,
-                                kv_scale)
+                                kv_scale, sparse_cache_type)
 
 
 # pos encoding ops

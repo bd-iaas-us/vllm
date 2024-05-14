@@ -52,6 +52,8 @@ class CPUCacheEngine:
         else:
             self.dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
+        # Temporarily nothing now.
+
         # Get attention backend.
         self.attn_backend = get_attn_backend(model_config.dtype)
 
@@ -98,6 +100,9 @@ class CPUCacheEngine:
             dtype = model_config.dtype
         else:
             dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_dtype]
+        
+        # Temporarily nothing now.
+
         dtype_size = torch.tensor([], dtype=dtype).element_size()
         return dtype_size * total
 
@@ -126,6 +131,7 @@ class CPUWorker(LoraNotSupportedWorkerBase):
         vision_language_config: Optional[VisionLanguageConfig] = None,
         kv_cache_dtype: Optional[str] = "auto",
         is_driver_worker: bool = False,
+        sparse_cache_type: Optional[str] = "auto",
     ) -> None:
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -156,7 +162,8 @@ class CPUWorker(LoraNotSupportedWorkerBase):
             lora_config=self.lora_config,
             vision_language_config=self.vision_language_config,
             kv_cache_dtype=kv_cache_dtype,
-            is_driver_worker=is_driver_worker)
+            is_driver_worker=is_driver_worker,
+            sparse_cache_type=sparse_cache_type)
         # Uninitialized cache engine. Will be initialized by
         # initialize_cache.
         self.cache_engine: CPUCacheEngine

@@ -269,6 +269,7 @@ class FlashAttentionImpl(AttentionImpl):
                 self.scale,
                 self.alibi_slopes,
                 kv_scale,
+                attn_metadata.sparse_cache_type,
             )
 
         # Reshape the output tensor.

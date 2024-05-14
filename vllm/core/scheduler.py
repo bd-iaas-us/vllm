@@ -420,6 +420,7 @@ class Scheduler:
                 break
 
             running_queue.popleft()
+            # Is this the only part for appending?
             while not self._can_append_slots(seq_group):
                 budget.subtract_num_batched_tokens(seq_group.request_id,
                                                    num_running_tokens)
@@ -914,6 +915,17 @@ class Scheduler:
         # Appending slots only occurs in decoding.
         is_prefill = False
 
+        # Add a condition check in while loop based on the newly created KV cache to see if there is enough slots or not.
+        # if use sparse-kv-cache flag and there is i%n==0 step.
+        # We could consider reserve some KV blocks for contain these blocks.
+        # Is it possible to have unncessary more slots?
+        if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % 10 == 0:
+            return self.block_manager.can_append_slots_sparse_cache(
+                seq_group=seq_group,
+                num_lookahead_slots=self._get_num_lookahead_slots(is_prefill),
+            )
+
+
         return self.block_manager.can_append_slots(
             seq_group=seq_group,
             num_lookahead_slots=self._get_num_lookahead_slots(is_prefill),
@@ -986,6 +998,7 @@ class Scheduler:
                 if scheduler_outputs.num_prefill_groups > 0 else None,
             )
             seq_group_metadata_list.append(seq_group_metadata)
+            seq_group.n_times += 1
 
         # Now that the batch has been created, we can assume all blocks in the
         # batch will have been computed before the next scheduling invocation.
@@ -1032,8 +1045,23 @@ class Scheduler:
         num_lookahead_slots = self._get_num_lookahead_slots(is_prefill=False)
 
         for seq in seq_group.get_seqs(status=SequenceStatus.RUNNING):
+            # If use sparse-kv-cache flag and there is i%n==0 step.
+            # Get the original KV blocks
+            original_blocks = self.block_manager.get_block_table(seq)
+            # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
+            cows: List[Tuple[int, int]] = []
+            if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % 10 == 0:
+                cows = self.block_manager.create_new_slots(seq)
             cows = self.block_manager.append_slots(seq, num_lookahead_slots)
             blocks_to_copy.extend(cows)
+
+            # copy the KV blocks from the original KV cache to the new KV cache with the attention score or other tokens priority.
+            # Add a new ops method to copy all the KV cache from original to the new one.
+            # from vllm.attention.ops.paged_attn import (PagedAttention,
+            #                                PagedAttentionMetadata)
+            # PagedAttention.copy_to_paged_cache(original_blocks, cows,
+            #                                     attn_metadata.slot_mapping)
+            # ??
 
     def _preempt(
         self,

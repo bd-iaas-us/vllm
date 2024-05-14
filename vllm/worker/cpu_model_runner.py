@@ -33,6 +33,7 @@ class CPUModelRunner:
         vision_language_config: Optional[VisionLanguageConfig],
         kv_cache_dtype: Optional[str] = "auto",
         is_driver_worker: bool = False,
+        sparse_cache_type: Optional[str] = "auto",
         *args,
         **kwargs,
     ):
@@ -51,6 +52,7 @@ class CPUModelRunner:
         self.device = self.device_config.device
 
         self.kv_cache_dtype = kv_cache_dtype
+        self.sparse_cache_type = sparse_cache_type
         self.sliding_window = model_config.get_sliding_window()
         self.block_size = cache_config.block_size
         self.attn_backend = get_attn_backend(self.model_config.dtype)
@@ -159,6 +161,7 @@ class CPUModelRunner:
             block_tables=torch.tensor([]),
             slot_mapping=slot_mapping,
             kv_cache_dtype=self.kv_cache_dtype,
+            sparse_cache_type = self.sparse_cache_type,
         )
         return (input_tokens, input_positions, attn_metadata, seq_lens,
                 multi_modal_input)
@@ -243,6 +246,7 @@ class CPUModelRunner:
             decode_metadata=None,
             block_tables=block_tables,
             kv_cache_dtype=self.kv_cache_dtype,
+            sparse_cache_type = self.sparse_cache_type,
         )
         return (
             input_tokens,

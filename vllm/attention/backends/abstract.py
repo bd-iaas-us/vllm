@@ -96,6 +96,8 @@ class AttentionMetadata(Generic[T]):
     slot_mapping: torch.Tensor
     # The kv cache's data type.
     kv_cache_dtype: str
+    # The kv cache sparse type.
+    sparse_cache_type: str
 
     def __post_init__(self):
         if self.num_prefill_tokens > 0:

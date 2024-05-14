@@ -42,6 +42,8 @@ class CacheEngine:
         else:
             self.dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
+        # Temporarily nothing now.
+
         # Get attention backend.
         self.attn_backend = get_attn_backend(model_config.dtype)
 
@@ -97,6 +99,9 @@ class CacheEngine:
             dtype = model_config.dtype
         else:
             dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
+        
+        # Temporarily nothing now.
+        
         dtype_size = _get_dtype_size(dtype)
         return dtype_size * total
 
