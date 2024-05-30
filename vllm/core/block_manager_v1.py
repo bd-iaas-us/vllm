@@ -118,6 +118,7 @@ class CachedBlockAllocator(BlockAllocatorBase):
         block = self.cached_blocks[block_hash]
         assert block.block_hash == block_hash
         block.ref_count += 1
+        print("bbbbbbblock " + str(block.block_number))
         return block
 
     def free(self, block: PhysicalTokenBlock) -> None:
@@ -185,6 +186,7 @@ class UncachedBlockAllocator(BlockAllocatorBase):
             raise ValueError("Out of memory! No free blocks are available.")
         block = self.free_blocks.pop()
         block.ref_count = 1
+        print("bbbbbbblockyyy " + str(block.block_number))
         return block
 
     def free(self, block: PhysicalTokenBlock) -> None:
@@ -299,7 +301,12 @@ class BlockSpaceManagerV1(BlockSpaceManager):
                 block = self.gpu_allocator.allocate()
                 # Set the reference counts of the token blocks.
                 block.ref_count = seq_group.num_seqs()
+            #pprint
+            print("TAAAAAAAAABLE")
+            print("Table length " + str(len(block_table)))
+            print("Table length before " + str(len(block_table)))
             block_table.append(block)
+            print("Table length after " + str(len(block_table)) + " ref count " + str(block.ref_count))
 
         # Assign the block table for each sequence.
         for seq in seq_group.get_seqs(status=SequenceStatus.WAITING):
@@ -383,32 +390,45 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         return new_block
 
     # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
-    def create_new_slots(self, seq: Sequence) -> List[Tuple[int, int]]:
+    def create_new_slots(self, seq: Sequence) -> Tuple[List[Tuple[int, int]], List[int]]:
         # go through the block_table to see if block.ref_count == 1
         # if 1, self.gpu_allocator.free(block) to free the block
-        block_table = self.block_tables[seq.seq_id]
-        new_block_number = math.ceil(len(seq.logical_token_blocks) * 0.2)
+        ret : List[Tuple[int, int]] = []
+        block_table = self.block_tables[seq.seq_id].copy()
+        for block in block_table:
+            print("BBBBCreate " + str(block.block_number))
+        # new_block_number = math.ceil(len(seq.logical_token_blocks) * 1.0) #?? 0.2
+        new_block_number = math.ceil(len(block_table) * 1.0) #?? 0.2
         # Will reuse cause trouble??
-        # for i in range(new_block_number):
-        #     if (self.block_sliding_window
-        #             and len(block_table) >= self.block_sliding_window):
-        #         # reuse a block
-        #         block_table.append(block_table[len(block_table) %
-        #                                        self.block_sliding_window])
-        #     else:
-        #         # The sequence hash a new logical block.
-        #         # Allocate a new physical block.
-        #         new_block = self._allocate_last_physical_block(seq)
-        #         block_table.append(new_block)
-        #         return []
+        new_block_table: BlockTable = []
+        for i in range(new_block_number):
+            if (self.block_sliding_window
+                    and len(block_table) >= self.block_sliding_window):
+                # reuse a block
+                block_table.append(block_table[len(block_table) %
+                                               self.block_sliding_window])
+            else:
+                # The sequence hash a new logical block.
+                # Allocate a new physical block.
+                new_block = self.gpu_allocator.allocate()
+                print("DDDDDD NEW "+ str(new_block.block_number))
+                # new_block.ref_count = 1 # seq_group.num_seqs()
+                new_block_table.append(new_block)
+                ret.append((block_table[i].block_number, new_block.block_number))
+        self.block_tables[seq.seq_id] = new_block_table.copy()
         # for block in block_table:
-        #     block.ref_count -= 1
-        #     if block.ref_count == 0:
-        #         self.gpu_allocator.free(block)
+        # #     # block.ref_count -= 1
+        # #     # if block.ref_count == 0:
+        #     print("CCCCCreate " + str(block.block_number))
+        #     self.gpu_allocator.free(block)
         # what about v2??
-        
+        print("create_new_slots")
+        for item in ret:
+            print("item")
+            print(item[0])
+            print(item[1])
         # Update the block table for this new KV cache slots.
-        pass
+        return (ret, block_table)
 
     def append_slots(
         self,

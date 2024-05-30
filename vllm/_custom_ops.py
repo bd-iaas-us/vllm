@@ -262,6 +262,24 @@ def reshape_and_cache_flash(
                                            slot_mapping, kv_cache_dtype)
 
 
+def sparse_cache_copy(key_caches: torch.Tensor, value_caches: torch.Tensor,
+                block_mapping: torch.Tensor, sparse_condition: torch.Tensor) -> None:
+    """
+    const std::vector<torch::Tensor>& src,
+    std::vector<torch::Tensor>& target,
+    const std::vector<torch::Tensor>& selection
+
+    std::vector<torch::Tensor>& key_caches,
+  std::vector<torch::Tensor>& value_caches,
+  const std::vector<int64_t>& block_mapping_src,
+  const std::vector<int64_t>& block_mapping_dst,
+  const torch::Tensor& selection
+    ??
+    """
+    block_mapping_src = block_mapping[:, 0].tolist()
+    block_mapping_dst = block_mapping[:, 1].tolist()
+    vllm_cache_ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, sparse_condition)
+
 def copy_blocks(key_caches: torch.Tensor, value_caches: torch.Tensor,
                 block_mapping: torch.Tensor) -> None:
     vllm_cache_ops.copy_blocks(key_caches, value_caches, block_mapping)

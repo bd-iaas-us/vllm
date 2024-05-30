@@ -10,6 +10,19 @@ void swap_blocks(
   torch::Tensor& dst,
   const torch::Tensor& block_mapping);
 
+// void sparse_cache_copy(
+//   const std::vector<torch::Tensor>& key_caches,
+//   std::vector<torch::Tensor>& value_caches,
+//   const torch::Tensor& block_mapping,
+//   const std::vector<torch::Tensor>& selection);
+
+void sparse_cache_copy(
+  std::vector<torch::Tensor>& key_caches,
+  std::vector<torch::Tensor>& value_caches,
+  std::vector<int64_t>& block_mapping_src,
+  std::vector<int64_t>& block_mapping_dst,
+  const torch::Tensor& selection);
+
 void copy_blocks(
   std::vector<torch::Tensor>& key_caches,
   std::vector<torch::Tensor>& value_caches,

@@ -93,6 +93,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     &copy_blocks,
     "Copy the cache blocks from src to dst");
   cache_ops.def(
+    "sparse_cache_copy",
+    &sparse_cache_copy,
+    "Sparse copy the cache blocks from src to dst");
+  cache_ops.def(
     "reshape_and_cache",
     &reshape_and_cache,
     "Reshape the key and value tensors and cache them");

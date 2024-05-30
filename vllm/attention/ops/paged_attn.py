@@ -235,3 +235,25 @@ class PagedAttention:
         key_caches = [kv_cache[0] for kv_cache in kv_caches]
         value_caches = [kv_cache[1] for kv_cache in kv_caches]
         ops.copy_blocks(key_caches, value_caches, src_to_dists)
+
+    @staticmethod
+    def sparse_cache_copy(
+        kv_caches: List[torch.Tensor],
+        src_to_dists: torch.Tensor,
+        sparse_condition: torch.Tensor,
+    ) -> None:
+        # ??
+        key_caches = [kv_cache[0] for kv_cache in kv_caches]
+        value_caches = [kv_cache[1] for kv_cache in kv_caches]
+        print("PPPPPSPRASE")
+        print(src_to_dists)
+        print(sparse_condition)
+        print(len(key_caches))
+        print(len(value_caches))
+        print(key_caches[0].shape)
+        print(value_caches[0].shape)
+        # print("PPPPPSPRASE")
+        # print(key_caches)
+        # print(value_caches)
+        print("PPPPSPRASE end")
+        ops.sparse_cache_copy(key_caches, value_caches, src_to_dists, sparse_condition)

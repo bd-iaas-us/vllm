@@ -57,6 +57,17 @@ class XFormersBackend(AttentionBackend):
     ) -> None:
         PagedAttention.copy_blocks(kv_caches, src_to_dists)
 
+    @staticmethod
+    def sparse_cache_copy(
+        kv_caches: List[torch.Tensor],
+        src_to_dists: torch.Tensor,
+        sparse_condition: torch.Tensor,
+    ) -> None:
+        print("XXXXXSPRASE")
+        print(src_to_dists)
+        print("XXXXSPRASE end")
+        PagedAttention.sparse_cache_copy(kv_caches, src_to_dists, sparse_condition)
+
 
 @dataclass
 class XFormersMetadata(AttentionMetadataPerStage, PagedAttentionMetadata):

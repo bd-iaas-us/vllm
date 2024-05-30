@@ -14,6 +14,8 @@ from vllm.lora.request import LoRARequest
 from vllm.sequence import (Sequence, SequenceData, SequenceGroup,
                            SequenceGroupMetadata, SequenceStatus)
 
+from vllm.attention.ops.paged_attn import PagedAttention #, PagedAttentionMetadata)
+
 logger = init_logger(__name__)
 
 # Test-only. If configured, decode is preempted with
@@ -123,6 +125,8 @@ class SchedulerOutputs:
     blocks_to_swap_out: List[Tuple[int, int]]
     # Blocks to copy. Source to dest block.
     blocks_to_copy: List[Tuple[int, int]]
+    # Blocks to sparsecopy. Source to dest block.
+    blocks_to_sparse_copy: List[Tuple[int, int]]
     # Sequence groups that are going to be ignored.
     ignored_seq_groups: List[SequenceGroup]
     # The number of slots for lookahead decoding.
@@ -177,6 +181,8 @@ class SchedulerRunningOutputs:
     blocks_to_swap_out: List[Tuple[int, int]]
     # The blocks to copy.
     blocks_to_copy: List[Tuple[int, int]]
+    # The blocks to sparse copy.
+    blocks_to_sparse_copy: List[Tuple[int, int]]
     # The number of slots for lookahead decoding.
     num_lookahead_slots: int
 
@@ -189,6 +195,7 @@ class SchedulerRunningOutputs:
             swapped_out=[],
             blocks_to_swap_out=[],
             blocks_to_copy=[],
+            blocks_to_sparse_copy=[],
             num_lookahead_slots=0,
         )
 
@@ -209,6 +216,8 @@ class SchedulerSwappedInOutputs:
     blocks_to_swap_in: List[Tuple[int, int]]
     # The blocks to copy.
     blocks_to_copy: List[Tuple[int, int]]
+    # The blocks to sparse copy.
+    blocks_to_sparse_copy: List[Tuple[int, int]]
     # The number of slots for lookahead decoding.
     num_lookahead_slots: int
     # Infeasible sequence groups.
@@ -221,6 +230,7 @@ class SchedulerSwappedInOutputs:
             prefill_seq_groups=[],
             blocks_to_swap_in=[],
             blocks_to_copy=[],
+            blocks_to_sparse_copy=[],
             num_lookahead_slots=0,
             infeasible_seq_groups=[],
         )
@@ -399,11 +409,14 @@ class Scheduler:
         # Blocks that need to be swapped or copied before model execution.
         blocks_to_swap_out: List[Tuple[int, int]] = []
         blocks_to_copy: List[Tuple[int, int]] = []
+        blocks_to_sparse_copy: List[Tuple[int, int]] = []
 
         decode_seq_groups: List[ScheduledSequenceGroup] = []
         prefill_seq_groups: List[ScheduledSequenceGroup] = []
         preempted: List[SequenceGroup] = []
         swapped_out: List[SequenceGroup] = []
+
+        blocks_to_free: List[int] = []
 
         # NOTE(woosuk): Preemption happens only when there is no available slot
         # to keep all the sequence groups in the RUNNING state.
@@ -450,7 +463,7 @@ class Scheduler:
                         swapped_out.append(seq_group)
                     break
             else:
-                self._append_slots(seq_group, blocks_to_copy)
+                blocks_to_free.extend(self._append_slots(seq_group, blocks_to_copy, blocks_to_sparse_copy))
                 is_prefill = seq_group.is_prefill()
                 if is_prefill:
                     prefill_seq_groups.append(
@@ -473,6 +486,9 @@ class Scheduler:
                 if curr_loras is not None and seq_group.lora_int_id > 0:
                     curr_loras.add(seq_group.lora_int_id)
 
+        for item in blocks_to_free:
+            print("CCCCCreate " + str(item.block_number))
+            self.block_manager.gpu_allocator.free(item)
         return running_queue, SchedulerRunningOutputs(
             decode_seq_groups=decode_seq_groups,
             prefill_seq_groups=prefill_seq_groups,
@@ -480,6 +496,7 @@ class Scheduler:
             swapped_out=swapped_out,
             blocks_to_swap_out=blocks_to_swap_out,
             blocks_to_copy=blocks_to_copy,
+            blocks_to_sparse_copy=blocks_to_sparse_copy,
             num_lookahead_slots=self._get_num_lookahead_slots(
                 is_prefill=False))
 
@@ -517,8 +534,11 @@ class Scheduler:
         # Blocks that need to be swapped or copied before model execution.
         blocks_to_swap_in: List[Tuple[int, int]] = []
         blocks_to_copy: List[Tuple[int, int]] = []
+        blocks_to_sparse_copy: List[Tuple[int, int]] = []
         decode_seq_groups: List[ScheduledSequenceGroup] = []
         prefill_seq_groups: List[ScheduledSequenceGroup] = []
+
+        blocks_to_free: List[int] = []
         now = time.time()
         swapped_queue = policy.sort_by_priority(now, swapped_queue)
         infeasible_seq_groups: List[SequenceGroup] = []
@@ -571,7 +591,7 @@ class Scheduler:
                 curr_loras.add(lora_int_id)
             swapped_queue.popleft()
             self._swap_in(seq_group, blocks_to_swap_in)
-            self._append_slots(seq_group, blocks_to_copy)
+            blocks_to_free.extend(self._append_slots(seq_group, blocks_to_copy, blocks_to_sparse_copy))
             is_prefill = seq_group.is_prefill()
             if is_prefill:
                 prefill_seq_groups.append(
@@ -584,12 +604,17 @@ class Scheduler:
             budget.add_num_seqs(seq_group.request_id, num_new_seqs)
 
         swapped_queue.extendleft(leftover_swapped)
+        
+        for item in blocks_to_free:
+            print("CCCCCreate " + str(item.block_number))
+            self.block_manager.gpu_allocator.free(item)
 
         return swapped_queue, SchedulerSwappedInOutputs(
             decode_seq_groups=decode_seq_groups,
             prefill_seq_groups=prefill_seq_groups,
             blocks_to_swap_in=blocks_to_swap_in,
             blocks_to_copy=blocks_to_copy,
+            blocks_to_sparse_copy=blocks_to_sparse_copy,
             num_lookahead_slots=self._get_num_lookahead_slots(
                 is_prefill=False),
             infeasible_seq_groups=infeasible_seq_groups,
@@ -801,6 +826,7 @@ class Scheduler:
             blocks_to_swap_out=running_scheduled.blocks_to_swap_out,
             blocks_to_copy=running_scheduled.blocks_to_copy +
             swapped_in.blocks_to_copy,
+            blocks_to_sparse_copy=running_scheduled.blocks_to_sparse_copy,
             ignored_seq_groups=prefills.ignored_seq_groups +
             swapped_in.infeasible_seq_groups,
             num_lookahead_slots=running_scheduled.num_lookahead_slots,
@@ -889,6 +915,7 @@ class Scheduler:
             blocks_to_swap_out=running_scheduled.blocks_to_swap_out,
             blocks_to_copy=running_scheduled.blocks_to_copy +
             swapped_in.blocks_to_copy,
+            blocks_to_sparse_copy=running_scheduled.blocks_to_sparse_copy,
             ignored_seq_groups=prefills.ignored_seq_groups,
             num_lookahead_slots=running_scheduled.num_lookahead_slots,
             running_queue_size=len(self.running),
@@ -1030,7 +1057,8 @@ class Scheduler:
         self,
         seq_group: SequenceGroup,
         blocks_to_copy: List[Tuple[int, int]],
-    ) -> None:
+        blocks_to_sparse_copy: List[Tuple[int, int]],
+    ) -> List[int]:
         """Appends new slots to the sequences in the given sequence group.
 
         Args:
@@ -1042,18 +1070,23 @@ class Scheduler:
                 the new source and destination block indices for the appended
                 slots.
         """
+        print("I am called once")
         num_lookahead_slots = self._get_num_lookahead_slots(is_prefill=False)
 
+        free_blocks : List = []
         for seq in seq_group.get_seqs(status=SequenceStatus.RUNNING):
             # If use sparse-kv-cache flag and there is i%n==0 step.
             # Get the original KV blocks
             original_blocks = self.block_manager.get_block_table(seq)
             # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
             cows: List[Tuple[int, int]] = []
-            if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % 10 == 0:
-                cows = self.block_manager.create_new_slots(seq)
+            sparse_cows: List[Tuple[int, int]] = []
+            if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % 20 == 0:
+                sparse_cows, free_block = self.block_manager.create_new_slots(seq)
+                free_blocks.extend(free_block)
             cows = self.block_manager.append_slots(seq, num_lookahead_slots)
             blocks_to_copy.extend(cows)
+            blocks_to_sparse_copy.extend(sparse_cows)
 
             # copy the KV blocks from the original KV cache to the new KV cache with the attention score or other tokens priority.
             # Add a new ops method to copy all the KV cache from original to the new one.
@@ -1062,6 +1095,15 @@ class Scheduler:
             # PagedAttention.copy_to_paged_cache(original_blocks, cows,
             #                                     attn_metadata.slot_mapping)
             # ??
+            # PagedAttention.sparse_cache_copy(self.
+            #                                  block_manager.gpu_allocator.gpu
+            #                                  gpu_cache, src_to_dst)
+        # for item in free_blocks:
+        # #     # block.ref_count -= 1
+        # #     # if block.ref_count == 0:
+        #     print("CCCCCreate " + str(item.block_number))
+        #     self.block_manager.gpu_allocator.free(item)
+        return free_blocks
 
     def _preempt(
         self,

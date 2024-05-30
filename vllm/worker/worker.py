@@ -196,11 +196,14 @@ class Worker(WorkerBase):
         # the model initialization and profiling.
         set_random_seed(self.model_config.seed)
 
+    # ?? CPU worker
     def cache_swap(
         self,
         blocks_to_swap_in: torch.Tensor,
         blocks_to_swap_out: torch.Tensor,
         blocks_to_copy: torch.Tensor,
+        blocks_to_sparse_copy: torch.Tensor,
+        sparse_condition: torch.Tensor,
     ) -> None:
         # Issue cache operations.
         if blocks_to_swap_in.numel() > 0:
@@ -209,13 +212,20 @@ class Worker(WorkerBase):
             self.cache_engine.swap_out(blocks_to_swap_out)
         if blocks_to_copy.numel() > 0:
             self.cache_engine.copy(blocks_to_copy)
+        print("LLLLLLLLength " + str(len(blocks_to_sparse_copy)))
+        for item in blocks_to_sparse_copy:
+            print("TEMP")
+            print(item[0])
+            print(item[1])
+        if blocks_to_sparse_copy.numel() > 0:
+            self.cache_engine.sparse_cache_copy(blocks_to_sparse_copy, sparse_condition)
 
     @torch.inference_mode()
     def execute_model(
         self,
         execute_model_req: Optional[ExecuteModelRequest] = None
     ) -> List[Union[SamplerOutput, PoolerOutput]]:
-
+        print("IIIIIIIII am called once at execute_model")
         if execute_model_req is None:
             seq_group_metadata_list = None
         else:
@@ -224,6 +234,8 @@ class Worker(WorkerBase):
         blocks_to_swap_in: torch.Tensor
         blocks_to_swap_out: torch.Tensor
         blocks_to_copy: torch.Tensor
+        blocks_to_sparse_copy: torch.Tensor
+        sparse_condition = torch.ones(self.cache_engine.num_layers * self.cache_engine.block_size * 4) # 10001??
         if self.is_driver_worker:
             assert seq_group_metadata_list is not None
             assert execute_model_req is not None
@@ -244,11 +256,15 @@ class Worker(WorkerBase):
             blocks_to_copy = torch.tensor(execute_model_req.blocks_to_copy,
                                           device=self.device,
                                           dtype=torch.int64).view(-1, 2)
+            blocks_to_sparse_copy = torch.tensor(execute_model_req.blocks_to_sparse_copy, 
+                                                 device=self.device, 
+                                                 dtype=torch.int64).view(-1, 2)
             data: Dict[str, Any] = {
                 "num_seq_groups": num_seq_groups,
                 "blocks_to_swap_in": blocks_to_swap_in,
                 "blocks_to_swap_out": blocks_to_swap_out,
                 "blocks_to_copy": blocks_to_copy,
+                "blocks_to_sparse_copy" : blocks_to_sparse_copy,
             }
             broadcast_tensor_dict(data, src=0)
         else:
@@ -257,8 +273,9 @@ class Worker(WorkerBase):
             blocks_to_swap_in = data["blocks_to_swap_in"]
             blocks_to_swap_out = data["blocks_to_swap_out"]
             blocks_to_copy = data["blocks_to_copy"]
+            blocks_to_sparse_copy = data["blocks_to_sparse_copy"]
 
-        self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy)
+        self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy, blocks_to_sparse_copy, sparse_condition)
 
         # If there is no input, we don't need to execute the model.
         if num_seq_groups == 0:

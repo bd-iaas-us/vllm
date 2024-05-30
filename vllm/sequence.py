@@ -819,6 +819,8 @@ class ExecuteModelRequest:
     blocks_to_swap_out: List[Tuple[int, int]] = field(default_factory=list)
     # Blocks to copy. Source to dest block.
     blocks_to_copy: List[Tuple[int, int]] = field(default_factory=list)
+    # Blocks to sparse copy. Source to dest block.
+    blocks_to_sparse_copy: List[Tuple[int, int]] = field(default_factory=list)
     # The number of slots for lookahead decoding.
     num_lookahead_slots: int = 0
     # The number of requests in the running queue.
@@ -833,6 +835,7 @@ class ExecuteModelRequest:
             blocks_to_swap_in=self.blocks_to_swap_in.copy(),
             blocks_to_swap_out=self.blocks_to_swap_out.copy(),
             blocks_to_copy=self.blocks_to_copy.copy(),
+            blocks_to_sparse_copy=self.blocks_to_sparse_copy.copy(),
             num_lookahead_slots=self.num_lookahead_slots,
             running_queue_size=self.running_queue_size,
         )
