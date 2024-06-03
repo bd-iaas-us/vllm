@@ -87,6 +87,11 @@ class CacheEngine:
         print("SPRASE")
         print(src_to_dsts)
         print("SPRASE end")
+        print("SSSSSSSSSSSS")
+        for i in range(self.num_layers):
+            print(i)
+            print(self.gpu_cache[i].shape)
+        # print(self.gpu_cache[0][:2])
         self.attn_backend.sparse_cache_copy(self.gpu_cache, src_to_dsts, sparse_condition)
 
     @staticmethod

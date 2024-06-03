@@ -68,6 +68,29 @@ class PagedAttention:
         kv_cache_dtype: str,
         kv_scale: float,
     ) -> None:
+        print("SSSSSSSLOT MAPPING")
+        torch.set_printoptions(threshold=float('inf'))
+        print(key.shape)
+        print(key.dtype)
+        print(key.size(0))
+        print(key.size(1))
+        print(key.size(2))
+        print(key.stride(0))
+        print(key.stride(1))
+        print(key.stride(2))
+        #print(key)
+        print("TTTTSSLOT MAPPING")
+        print(value.shape)
+        print(value.dtype)
+        print(value.size(0))
+        print(value.size(1))
+        print(value.size(2))
+        print(value.stride(0))
+        print(value.stride(1))
+        print(value.stride(2))
+        print("RRRRSSLOT MAPPING")
+        print(slot_mapping.shape)
+        print(slot_mapping)
         ops.reshape_and_cache(
             key,
             value,
@@ -247,13 +270,35 @@ class PagedAttention:
         value_caches = [kv_cache[1] for kv_cache in kv_caches]
         print("PPPPPSPRASE")
         print(src_to_dists)
+        print(src_to_dists[:, 0])
+        print(src_to_dists[:, 1])
         print(sparse_condition)
         print(len(key_caches))
         print(len(value_caches))
         print(key_caches[0].shape)
         print(value_caches[0].shape)
         # print("PPPPPSPRASE")
-        # print(key_caches)
-        # print(value_caches)
+        torch.set_printoptions(threshold=float('inf'))
+        print(key_caches[0][-5:, :100])
+        print("WWWWTTTFFFFF")
+        print(value_caches[0][-5:, :100])
         print("PPPPSPRASE end")
-        ops.sparse_cache_copy(key_caches, value_caches, src_to_dists, sparse_condition)
+        selection_index_src_v = []
+        selection_index_dst_v = []
+        dst_idx = 0
+        for src_idx, item in enumerate(sparse_condition):
+            selection_index_src_v.append(src_idx)
+            selection_index_dst_v.append(dst_idx)
+            dst_idx += 1
+        selection_index_src_tensor = torch.tensor(selection_index_src_v, dtype=torch.int64)
+        selection_index_dst_tensor = torch.tensor(selection_index_dst_v, dtype=torch.int64)
+        print("selection_index_src_tensor:", selection_index_src_tensor)
+        print("selection_index_dst_tensor:", selection_index_dst_tensor)
+        block_mapping_src = src_to_dists[:, 0].to(torch.int64)
+        block_mapping_dst = src_to_dists[:, 1].to(torch.int64)
+        print(block_mapping_src)
+        print(block_mapping_dst)       
+        ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, selection_index_src_tensor, selection_index_dst_tensor)
+        print(key_caches[0][-9:, :100])
+        print("WTFWTFWTFWTFWTF end")
+        print(value_caches[0][-9:, :100])

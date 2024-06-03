@@ -68,194 +68,6 @@ void swap_blocks(
   }
 }
 
-// void sparse_cache_copy(
-//   torch::Tensor& src,
-//   torch::Tensor& dst,
-//   const torch::Tensor& block_mapping,
-//   const std::vector<torch::Tensor>& selection) {
-//   torch::Device src_device = src.device();
-//   torch::Device dst_device = dst.device();
-//   TORCH_CHECK(
-//       src_device.index() == dst_device.index(),
-//       "src and dst must be on the same GPU");
-//   cudaMemcpyKind memcpy_type = udaMemcpyDeviceToDevice;
-
-//   TORCH_CHECK(block_mapping.device().is_cpu(), "block_mapping must be on CPU");
-//   char *src_ptr = static_cast<char*>(src.data_ptr());
-//   char *dst_ptr = static_cast<char*>(dst.data_ptr());
-
-// }
-
-
-// namespace vllm {
-
-// // Grid: (num_layers, num_pairs)
-// template<typename scalar_t>
-// __global__ void sparse_cache_copy_kernel(
-//   int64_t* key_cache_ptrs,
-//   int64_t* value_cache_ptrs,
-//   const int64_t* __restrict__ block_mapping,
-//   const int64_t* __restrict__ selection,
-//   const int numel_per_block) {
-//   const int layer_idx = blockIdx.x;
-//   const int pair_idx = blockIdx.y;
-
-//   scalar_t* key_cache = reinterpret_cast<scalar_t*>(key_cache_ptrs[layer_idx]);
-//   scalar_t* value_cache = reinterpret_cast<scalar_t*>(value_cache_ptrs[layer_idx]);
-//   int64_t src_block_number = block_mapping[2 * pair_idx];
-//   int64_t dst_block_number = block_mapping[2 * pair_idx + 1];
-
-//   const int64_t src_block_offset = src_block_number * numel_per_block;
-//   const int64_t dst_block_offset = dst_block_number * numel_per_block;
-//   for (int i = threadIdx.x; i < numel_per_block; i += blockDim.x) {
-//     int64_t src_offset = src_block_offset + i;
-//     int64_t dst_offset = dst_block_offset + i;
-//     key_cache[dst_offset] = key_cache[src_offset];
-//   }
-//   for (int i = threadIdx.x; i < numel_per_block; i += blockDim.x) {
-//     int64_t src_offset = src_block_offset + i;
-//     int64_t dst_offset = dst_block_offset + i;
-//     value_cache[dst_offset] = value_cache[src_offset];
-//   }
-// }
-
-// } // namespace vllm
-
-
-// void sparse_cache_copy(
-//   const std::vector<torch::Tensor>& key_caches,
-//   std::vector<torch::Tensor>& value_caches,
-//   const torch::Tensor& block_mapping,
-//   const std::vector<torch::Tensor>& selection) {
-//   int num_layers = key_caches.size();
-//   TORCH_CHECK(num_layers == value_caches.size());
-//   if (num_layers == 0) {
-//     return;
-//   }
-//   torch::Device cache_device = key_caches[0].device();
-//   TORCH_CHECK(cache_device.is_cuda());
-
-//   // Create data structures for the kernel.
-//   // Create an array of pointers to the key and value caches.
-//   int64_t key_cache_ptrs[num_layers];
-//   int64_t value_cache_ptrs[num_layers];
-//   for (int layer_idx = 0; layer_idx < num_layers; ++layer_idx) {
-//     key_cache_ptrs[layer_idx] = reinterpret_cast<int64_t>(key_caches[layer_idx].data_ptr());
-//     value_cache_ptrs[layer_idx] = reinterpret_cast<int64_t>(value_caches[layer_idx].data_ptr());
-//   }
-
-//   // block_mapping is a 2D tensor with shape (num_pairs, 2).
-//   int num_pairs = block_mapping.size(0);
-
-//   // Move the data structures to the GPU.
-//   // NOTE: This synchronizes the CPU and GPU.
-//   torch::Tensor key_cache_ptrs_tensor = torch::from_blob(
-//     key_cache_ptrs, {num_layers}, torch::kInt64).to(cache_device);
-//   torch::Tensor value_cache_ptrs_tensor = torch::from_blob(
-//     value_cache_ptrs, {num_layers}, torch::kInt64).to(cache_device);
-
-//   // Launch the kernel.
-//   const int numel_per_block = key_caches[0][0].numel();
-//   dim3 grid(num_layers, num_pairs);
-//   dim3 block(std::min(1024, numel_per_block));
-//   const at::cuda::OptionalCUDAGuard device_guard(cache_device);
-//   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-//   VLLM_DISPATCH_FLOATING_AND_BYTE_TYPES(
-//     key_caches[0].scalar_type(), "sparse_cache_copy_kernel", ([&] {
-//       vllm::sparse_cache_copy_kernel<scalar_t><<<grid, block, 0, stream>>>(
-//         key_cache_ptrs_tensor.data_ptr<int64_t>(),
-//         value_cache_ptrs_tensor.data_ptr<int64_t>(),
-//         block_mapping.data_ptr<int64_t>(),
-//         selection.data_ptr<int64_t>(),
-//         numel_per_block);
-//     }));
-// }
-
-// namespace vllm {
-
-// // Grid: (num_layers, 1)
-// template <typename scalar_t>
-// __global__ void sparse_cache_copy_kernel(
-//   const scalar_t* __restrict__ src,
-//   scalar_t* __restrict__ target,
-//   const int* __restrict__ selection,
-//   int64_t* __restrict__ target_indices,
-//   const int64_t num_elements) {
-  
-//   const int layer_idx = blockIdx.x;
-//   const int idx = threadIdx.x + blockDim.x * blockIdx.y;
-
-//   for (int64_t i = idx; i < num_elements; i += blockDim.x * gridDim.y) {
-//     if (selection[layer_idx * num_elements + i] == 1) {
-//       unsigned long long int* address = (unsigned long long int*)&target_indices[layer_idx];
-//       const int64_t target_idx = atomicAdd(address, 1ULL);
-//       //const int64_t target_idx = atomicAdd(&target_indices[layer_idx], 1);
-//       target[layer_idx * num_elements + target_idx] = src[layer_idx * num_elements + i];
-//     }
-//   }
-// }
-
-// } // namespace vllm
-
-
-// void sparse_cache_copy(
-//   const std::vector<torch::Tensor>& src,
-//   std::vector<torch::Tensor>& target,
-//   // const torch::Tensor& block_mapping,
-//   const std::vector<torch::Tensor>& selection) {
-
-//   TORCH_CHECK(src.size() == target.size(), "src and target must have the same size");
-//   // TORCH_CHECK(src.size() == selection.size(), "src and selection must have the same size");
-
-//   const int num_layers = src.size();
-//   if (num_layers == 0) {
-//     return;
-//   }
-
-//   torch::Device device = src[0].device();
-//   TORCH_CHECK(device.is_cuda());
-
-//   // Create data structures for the kernel
-//   // ?? why num_layers
-//   std::vector<int64_t> src_ptrs(num_layers);
-//   std::vector<int64_t> target_ptrs(num_layers);
-//   std::vector<int64_t> selection_ptrs(num_layers);
-//   for (int layer_idx = 0; layer_idx < num_layers; ++layer_idx) {
-//     src_ptrs[layer_idx] = reinterpret_cast<int64_t>(src[layer_idx].data_ptr());
-//     target_ptrs[layer_idx] = reinterpret_cast<int64_t>(target[layer_idx].data_ptr());
-//     selection_ptrs[layer_idx] = reinterpret_cast<int64_t>(selection[layer_idx].data_ptr());
-//   }
-
-//   torch::Tensor src_ptrs_tensor = torch::from_blob(
-//     src_ptrs.data(), {num_layers}, torch::kInt64).to(device);
-//   torch::Tensor target_ptrs_tensor = torch::from_blob(
-//     target_ptrs.data(), {num_layers}, torch::kInt64).to(device);
-//   torch::Tensor selection_ptrs_tensor = torch::from_blob(
-//     selection_ptrs.data(), {num_layers}, torch::kInt64).to(device);
-
-//   // Allocate memory for target_indices
-//   torch::Tensor target_indices = torch::zeros({num_layers}, torch::dtype(torch::kInt64).device(device));
-
-//   // Launch the kernel
-//   // ??
-//   const int64_t num_elements = src[0].numel();
-//   const int num_threads = 1024;
-//   dim3 block(num_threads);
-//   dim3 grid(num_layers, (num_elements + num_threads - 1) / num_threads);
-
-//   const at::cuda::OptionalCUDAGuard device_guard(device);
-//   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-//   VLLM_DISPATCH_FLOATING_AND_BYTE_TYPES(
-//     src[0].scalar_type(), "sparse_cache_copy_kernel", ([&] {
-//       vllm::sparse_cache_copy_kernel<scalar_t><<<grid, block, 0, stream>>>(
-//         src_ptrs_tensor.data_ptr<scalar_t>(),
-//         target_ptrs_tensor.data_ptr<scalar_t>(),
-//         selection_ptrs_tensor.data_ptr<int>(),
-//         target_indices.data_ptr<int64_t>(),
-//         num_elements);
-//     }));
-// }
-
 namespace vllm {
 
 // Grid: (num_layers, num_pairs)
@@ -346,38 +158,152 @@ __global__ void sparse_cache_copy_kernel(
   const int64_t* __restrict__ block_mapping_src,
   const int64_t* __restrict__ block_mapping_dst,
   const int numel_per_block,
-  const int* __restrict__ selection_index_src,
-  const int* __restrict__ selection_index_dst,
+  const int64_t* __restrict__ selection_index_src,
+  const int64_t* __restrict__ selection_index_dst,
   const int num_selected_pairs) {
-  const int pair_idx = blockIdx.x;
-  const int src_block_idx = blockIdx.y;
-
-  if (pair_idx >= num_selected_pairs) {
-    return;
-  }
-
-  // Get the layer index from selection_index
-  const int layer_idx = selection_index_src[pair_idx];
-  const int dst_idx = selection_index_dst[pair_idx];
+  // printf("YYY");
+  const int layer_idx = blockIdx.x; // 0-11
+  const int selected_pairs_idx = blockIdx.y; // 0-63
+  // printf("Temp %d %d",layer_idx, selected_pairs_idx);
 
   scalar_t* key_cache = reinterpret_cast<scalar_t*>(key_cache_ptrs[layer_idx]);
   scalar_t* value_cache = reinterpret_cast<scalar_t*>(value_cache_ptrs[layer_idx]);
 
-  // printf("numel %d", numel_per_block); // 12288??
-  int block_mapping_src_idx = src_block_idx/numel_per_block;
-  int block_mapping_dst_idx = dst_idx/numel_per_block;
-  int64_t src_block_number = block_mapping_src[block_mapping_src_idx]; //src_block_idx
-  int64_t dst_block_number = block_mapping_dst[block_mapping_dst_idx]; //dst_idx % num_selected_pairs
-  const int64_t src_block_offset = src_block_number * numel_per_block;
-  const int64_t dst_block_offset = dst_block_number * numel_per_block;
+  const int block_size = 16;
+  const int x = 8;
+  const int num_heads = 12;
+  const int head_size = 64;
+  const int num_layers = 12;
+  // const int64_t block_idx = slot_idx / block_size; // 22053
+  // const int64_t block_offset = slot_idx % block_size; // 0, 1, 2...
 
-  for (int elem_idx = threadIdx.x; elem_idx < numel_per_block; elem_idx += blockDim.x) {
-    int64_t src_offset = src_block_offset + elem_idx;
-    int64_t dst_offset = dst_block_offset + elem_idx;
+  const int num768 = num_heads * head_size; // 12*64 = 768
+  //const int denominator = block_size * num_layers;
+  // printf("selected_index_src");
+  // for (int ind = 0; ind < num768; ind++ ){
+  //   printf("index %d, selection %d", ind, selection_index_src[ind]);
+  //   printf("index %d, selection %d", ind, selection_index_dst[ind]);
+  // }
+  // for (int ind = 0; ind < 4; ind++ ){
+  //   printf("index %d, block_mapping_src %d", ind, block_mapping_src[ind]);
+  //   printf("index %d, block_mapping_dst %d", ind, block_mapping_dst[ind]);
+  // }
+  // printf("ZZZ");
 
-    key_cache[dst_offset] = key_cache[src_offset];
-    value_cache[dst_offset] = value_cache[src_offset];
+  // 0 - 512
+  for (int i = threadIdx.x; i < num768; i += blockDim.x) {
+    // printf("BBB\n");
+    //   printf("selected_pairs_idx %d\n", selected_pairs_idx);
+    //   printf("layer_idx %d\n", layer_idx);
+    const int64_t src_token_idx  = selection_index_src[selected_pairs_idx+layer_idx*64];
+    const int64_t tgt_token_idx  = selection_index_dst[selected_pairs_idx+layer_idx*64];
+    // printf("#######");
+    // if (layer_idx == 0 && (selected_pairs_idx == 0 || selected_pairs_idx == 1 || selected_pairs_idx == 2)) {
+    //   printf("CCCCCCCCC\n");
+    //    printf("tgt_token_idx %d,selection_index_dst[selected_pairs_idx+layer_idx*64] %d, selected_pairs_idx+layer_idx*64 %d, selection_index_src[selected_pairs_idx+layer_idx*64] %d\n",  tgt_token_idx, selection_index_dst[selected_pairs_idx+layer_idx*64], selected_pairs_idx+layer_idx*64, selection_index_src[selected_pairs_idx+layer_idx*64]);
+    //    if (i==0) {
+    //     for(int mm=0; mm<10;mm++){
+    //       printf("num src %lld ", selection_index_src[mm]);
+    //       printf("num dst %lld ", selection_index_dst[mm]);
+    //     }
+    //       if (layer_idx == 0 && (selected_pairs_idx == 0 || selected_pairs_idx == 1 || selected_pairs_idx == 2)) {
+        
+    //     for(int mm=0; mm < 10;mm++){
+    //       printf("nummm selection_index_src %lld ", selection_index_src[mm]);
+    //     }
+        
+    //     for(int mm=0; mm < 10;mm++){
+          
+    //       printf("nummm selection_index_dst %lld ", selection_index_dst[mm]);
+    //     }
+    //     printf("DDDDDDDD\n");
+    //     for(int mm=0; mm < 10;mm++){
+    //       printf("nummm block_mapping_src %lld ", block_mapping_src[mm]);
+    //     }
+    //     for(int mm=0; mm < 10;mm++){
+    //       printf("nummm block_mapping_dst %lld ", block_mapping_dst[mm]);
+    //     }
+    //     }
+    //    }
+    // }
+    const int64_t src_token_layer_idx = src_token_idx % 64;
+    const int64_t tgt_token_layer_idx = tgt_token_idx % 64;
+    
+    const int64_t block_idx = block_mapping_src[src_token_layer_idx / block_size];
+    const int64_t block_offset = src_token_layer_idx % block_size;
+
+    const int64_t tgt_block_idx = block_mapping_dst[tgt_token_layer_idx / block_size];
+    const int64_t tgt_block_offset = tgt_token_layer_idx % block_size;
+
+    //if (layer_idx == 0 && (selected_pairs_idx == 0 || selected_pairs_idx == 1 || selected_pairs_idx == 2)) {
+    // printf("first selected_pairs_idx %d, layer_idx %d\n", selected_pairs_idx, layer_idx);
+    // printf("first src_token_idx %lld, tgt_token_idx %lld\n", src_token_idx, tgt_token_idx);
+    // printf("first block_idx %lld, block_offset %lld, tgt_block_idx %lld, tgt_block_offset %lld\n", block_idx, block_offset, tgt_block_idx, tgt_block_offset);
+    
+    //}
+    // const int64_t src_key_idx = token_idx * key_stride + i;
+    // const int64_t src_value_idx = token_idx * value_stride + i;
+
+    const int head_idx = i / head_size;
+    const int head_offset = i % head_size;
+    const int x_idx = head_offset / x;
+    const int x_offset = head_offset % x;
+    //if (layer_idx == 0 && (selected_pairs_idx == 0 || selected_pairs_idx == 1 || selected_pairs_idx == 2)) {
+    // printf("second selected_pairs_idx %d, layer_idx %d\n", selected_pairs_idx, layer_idx);
+    // printf("second src_token_idx %lld, tgt_token_idx %lld\n", src_token_idx, tgt_token_idx);
+    // printf("second block_idx %lld, block_offset %lld, tgt_block_idx %lld, tgt_block_offset %lld\n", block_idx, block_offset, tgt_block_idx, tgt_block_offset);
+    
+    //}
+
+    const int64_t src_key_idx = block_idx * num_heads * (head_size / x) * block_size * x
+                                + head_idx * (head_size / x) * block_size * x // 1/12 head
+                                + x_idx * block_size * x // 1/8 x
+                                + block_offset * x // 1/16 block_size
+                                + x_offset;
+    const int64_t src_value_idx = block_idx * num_heads * head_size * block_size
+                                  + head_idx * head_size * block_size // 1/12 head
+                                  + head_offset * block_size // 1/64 head_size
+                                  + block_offset; // 1/16 block_size
+    scalar_t tgt_key = key_cache[src_key_idx];
+    scalar_t tgt_value = value_cache[src_value_idx];
+
+    //if (layer_idx == 0 && (selected_pairs_idx == 0 || selected_pairs_idx == 1 || selected_pairs_idx == 2)) {
+    // printf("third selected_pairs_idx %d, layer_idx %d\n", selected_pairs_idx, layer_idx);
+    // printf("third src_token_idx %lld, tgt_token_idx %lld\n", src_token_idx, tgt_token_idx);
+    // printf("third block_idx %lld, block_offset %lld, tgt_block_idx %lld, tgt_block_offset %lld\n", block_idx, block_offset, tgt_block_idx, tgt_block_offset);
+    // //}
+
+    const int64_t tgt_key_idx = tgt_block_idx * num_heads * (head_size / x) * block_size * x
+                                + head_idx * (head_size / x) * block_size * x // 1/12 head
+                                + x_idx * block_size * x // 1/8 x
+                                + tgt_block_offset * x // 1/16 block_size
+                                + x_offset;
+    const int64_t tgt_value_idx = tgt_block_idx * num_heads * head_size * block_size
+                                  + head_idx * head_size * block_size // 1/12 head
+                                  + head_offset * block_size // 1/64 head_size
+                                  + tgt_block_offset; // 1/16 block_size
+    // if (token_idx == 0 || token_idx == 1) {
+    //   printf("src_key_idx %lld, src_value_idx %lld, tgt_key_idx %lld, tgt_value_idx %lld, tgt_key %f, tgt_value %f\n", src_key_idx, src_value_idx, tgt_key_idx, tgt_value_idx, tgt_key, tgt_value);
+    // }
+    // if constexpr (kv_dt == Fp8KVCacheDataType::kAuto) {
+    //   key_cache[tgt_key_idx] = tgt_key;
+    //   value_cache[tgt_value_idx] = tgt_value;
+    // } else {
+    //   key_cache[tgt_key_idx] = fp8::scaled_convert<cache_t, scalar_t, kv_dt>(tgt_key, kv_scale);
+    //   value_cache[tgt_value_idx] = fp8::scaled_convert<cache_t, scalar_t, kv_dt>(tgt_value, kv_scale);
+    // }
+    //if (layer_idx == 0 && (selected_pairs_idx == 0 || selected_pairs_idx == 1 || selected_pairs_idx == 2)) {
+      //printf("selection_index_dst[selected_pairs_idx+layer_idx*64] %d,  selected_pairs_idx+layer_idx*64 %d, selection_index_src[selected_pairs_idx+layer_idx*64] %d\n",  selection_index_dst[selected_pairs_idx+layer_idx*64], selected_pairs_idx+layer_idx*64, selection_index_src[selected_pairs_idx+layer_idx*64]);
+      // printf("selected_pairs_idx %d, i %d, blockDim.x %d, src_token_idx %d, tgt_token_idx %d\n", selected_pairs_idx, i, blockDim.x, src_token_idx, tgt_token_idx);
+      // printf("block_idx %d, block_offset %d, tgt_block_idx %lld, tgt_block_offset %lld\n", block_idx, block_offset, tgt_block_idx, tgt_block_offset);
+      // printf("head_idx %d, head_offset %d, x_idx %d, x_offset %d\n", head_idx, head_offset, x_idx, x_offset);
+      // printf("src_key_idx %lld, src_value_idx %lld, tgt_key %f, tgt_value %f\n", src_key_idx, src_value_idx, tgt_key, tgt_value);
+      // printf("tgt_key_idx %lld, tgt_value_idx %lld\n", tgt_key_idx, tgt_value_idx);
+    //}
+    key_cache[tgt_key_idx] = tgt_key;
+    value_cache[tgt_value_idx] = tgt_value;
   }
+
 }
 
 } // namespace vllm
@@ -385,17 +311,18 @@ __global__ void sparse_cache_copy_kernel(
 void sparse_cache_copy(
   std::vector<torch::Tensor>& key_caches,
   std::vector<torch::Tensor>& value_caches,
-  std::vector<int64_t>& block_mapping_src,
-  std::vector<int64_t>& block_mapping_dst,
-  const torch::Tensor& selection) {
+  const torch::Tensor& block_mapping_src_tensor,
+  const torch::Tensor& block_mapping_dst_tensor,
+  const torch::Tensor& selection_index_src_tensor,
+  const torch::Tensor& selection_index_dst_tensor) {
   int num_layers = key_caches.size();
 
-  int block_mapping_src_number = static_cast<int64_t>(block_mapping_src.size());
+  int block_mapping_src_number = block_mapping_src_tensor.size(0);
 
-  int block_mapping_dst_number = static_cast<int64_t>(block_mapping_dst.size());
-  printf("This is sparse copy %d, %d, %d\n",num_layers, value_caches.size(), selection.size(0));
+  //int block_mapping_dst_number = static_cast<int64_t>(block_mapping_dst.size());
+  printf("This is sparse copy %d, %d, %d\n",num_layers, value_caches.size(), selection_index_src_tensor.size(0));
   TORCH_CHECK(num_layers == value_caches.size());
-  TORCH_CHECK(selection.size(0) == num_layers * 16 * block_mapping_src_number);
+  TORCH_CHECK(selection_index_src_tensor.size(0) == num_layers * 16 * 4);
   if (num_layers == 0) {
     return;
   }
@@ -411,22 +338,37 @@ void sparse_cache_copy(
     value_cache_ptrs[layer_idx] = reinterpret_cast<int64_t>(value_caches[layer_idx].data_ptr());
   }
 
-  // Create selection_index tensor based on selection
-  std::vector<int> selection_index_src;
-  std::vector<int> selection_index_dst;
-  int dst_idx = 0;
-  for (int src_idx = 0; src_idx < selection.size(0); ++src_idx) {
-    if (selection[src_idx].item<int>() == 1) {
-      selection_index_src.push_back(src_idx);
-      selection_index_dst.push_back(dst_idx++);
-    }
-  }
-  int num_selected_pairs = selection_index_src.size();
+  // // Create selection_index tensor based on selection
+  // std::vector<int64_t> selection_index_src_v;
+  // std::vector<int64_t> selection_index_dst_v;
+  // int dst_idx = 0;
+  // for (int src_idx = 0; src_idx < selection.size(0); ++src_idx) {
+  //   if (selection[src_idx].item<int64_t>() == 1) {
+  //     selection_index_src_v.push_back(src_idx);
+  //     selection_index_dst_v.push_back(dst_idx++);
+  //   }
+  // }
+  int num_selected_pairs = selection_index_src_tensor.size(0);
   printf("num_selected_pairs %d\n", num_selected_pairs);
-  printf("selection_index_src first item %d\n", selection_index_src[0]);
-  printf("selection_index_src last item %d\n", selection_index_src[selection_index_src.size()-1]);
-  printf("selection_index_dst first item %d\n", selection_index_dst[0]);
-  printf("selection_index_dst last item %d\n", selection_index_dst[selection_index_dst.size()-1]);
+  // std::array<int64_t, 768> selection_index_src;
+  // std::array<int64_t, 768> selection_index_dst;
+  // std::copy(selection_index_src_v.begin(), selection_index_src_v.end(), selection_index_src.begin());
+  // std::copy(selection_index_dst_v.begin(), selection_index_dst_v.end(), selection_index_dst.begin());
+  // std::array<int64_t, 4> block_mapping_src_updated;
+  // std::array<int64_t, 4> block_mapping_dst_updated;
+  // std::copy(block_mapping_src.begin(), block_mapping_src.end(), block_mapping_src_updated.begin());
+  // std::copy(block_mapping_dst.begin(), block_mapping_dst.end(), block_mapping_dst_updated.begin());
+
+  // printf("selection_index_src first item %d\n", selection_index_src[0]);
+  // printf("selection_index_src second item %d\n", selection_index_src[1]);
+  // printf("selection_index_src third item %d\n", selection_index_src[2]);
+  // printf("selection_index_src last item %d\n", selection_index_src[selection_index_src.size()-1]);
+  // printf("selection_index_dst first item %d\n", selection_index_dst[0]);
+  // printf("selection_index_dst second item %d\n", selection_index_dst[1]);
+  // printf("selection_index_dst third item %d\n", selection_index_dst[2]);
+  // printf("selection_index_dst last item %d\n", selection_index_dst[selection_index_dst.size()-1]);
+
+  //torch::Tesortorch::tensor(selection_index_src, torch::kInt32)
 
   int numel_per_block = key_caches[0][0].numel();
 
@@ -436,19 +378,57 @@ void sparse_cache_copy(
     key_cache_ptrs, {num_layers}, torch::kInt64).to(cache_device);
   torch::Tensor value_cache_ptrs_tensor = torch::from_blob(
     value_cache_ptrs, {num_layers}, torch::kInt64).to(cache_device);
-  torch::Tensor selection_index_src_tensor = torch::from_blob(
-    selection_index_src.data(), {num_selected_pairs}, torch::kInt32).to(cache_device);
-  torch::Tensor selection_index_dst_tensor = torch::from_blob(
-    selection_index_dst.data(), {num_selected_pairs}, torch::kInt32).to(cache_device);
-  torch::Tensor block_mapping_src_tensor = torch::from_blob(
-    block_mapping_src.data(), {block_mapping_src_number}, torch::kInt64).to(cache_device);
-  torch::Tensor block_mapping_dst_tensor = torch::from_blob(
-    block_mapping_dst.data(), {block_mapping_dst_number}, torch::kInt64).to(cache_device);
+  torch::Tensor block_mapping_src_tensor_cuda = block_mapping_src_tensor.clone().to(cache_device);
+  torch::Tensor block_mapping_dst_tensor_cuda = block_mapping_dst_tensor.clone().to(cache_device);
+  torch::Tensor selection_index_src_tensor_cuda = selection_index_src_tensor.clone().to(cache_device);
+  torch::Tensor selection_index_dst_tensor_cuda = selection_index_dst_tensor.clone().to(cache_device);
+  // torch::Tensor selection_index_src_tensor = torch::from_blob(
+  //   selection_index_src.data(), {num_selected_pairs}, torch::kInt64).clone().to(cache_device);
+  // torch::Tensor selection_index_dst_tensor = torch::from_blob(
+  //   selection_index_dst.data(), {num_selected_pairs}, torch::kInt64).clone().to(cache_device);
+  // torch::Tensor block_mapping_src_tensor = torch::from_blob(
+  //   block_mapping_src_updated.data(), {block_mapping_src_number}, torch::kInt64).clone().to(cache_device);
+  // torch::Tensor block_mapping_dst_tensor = torch::from_blob(
+  //   block_mapping_dst_updated.data(), {block_mapping_dst_number}, torch::kInt64).clone().to(cache_device);
+
+  //   // Verify the tensor sizes and data types
+  // printf("sssssssselection_index_src_tensor: size %ld\n", selection_index_src_tensor.size(0));
+  // printf("sssssssselection_index_dst_tensor: size %ld\n", selection_index_dst_tensor.size(0));
+
+  // // Check the first few elements of the tensors
+  // auto selection_index_src_host = selection_index_src_tensor.cpu();
+  // auto selection_index_dst_host = selection_index_dst_tensor.cpu();
+
+  // printf("sssssssselection_index_src_tensor first item %ld\n", selection_index_src_host[0].item<int64_t>());
+  // printf("sssssssselection_index_src_tensor second item %ld\n", selection_index_src_host[1].item<int64_t>());
+  // printf("sssssssselection_index_src_tensor third item %ld\n", selection_index_src_host[2].item<int64_t>());
+  // printf("sssssssselection_index_src_tensor fourth item %ld\n", selection_index_src_host[3].item<int64_t>());
+  // printf("sssssssselection_index_dst_tensor first item %ld\n", selection_index_dst_host[0].item<int64_t>());
+  // printf("sssssssselection_index_dst_tensor second item %ld\n", selection_index_dst_host[1].item<int64_t>());
+  // printf("sssssssselection_index_dst_tensor third item %ld\n", selection_index_dst_host[2].item<int64_t>());
+  // printf("sssssssselection_index_dst_tensor fourth item %ld\n", selection_index_dst_host[3].item<int64_t>());
+
+  // int64_t* temp_src = selection_index_src_host.data_ptr<int64_t>();
+  // printf("EEEEEEEsssssssselection_index_src_tensor first item %ld\n", temp_src[0]);
+  // printf("EEEEEEEsssssssselection_index_src_tensor second item %ld\n", temp_src[1]);
+  // printf("EEEEEEEsssssssselection_index_src_tensor third item %ld\n", temp_src[2]);
+  // printf("EEEEEEEsssssssselection_index_src_tensor fourth item %ld\n", temp_src[3]);
+
+  // int64_t* temp_dst = selection_index_dst_host.data_ptr<int64_t>();
+  // printf("EEEEEEEsssssssselection_index_dst_tensor first item %ld\n", temp_dst[0]);
+  // printf("EEEEEEEsssssssselection_index_dst_tensor second item %ld\n", temp_dst[1]);
+  // printf("EEEEEEEsssssssselection_index_dst_tensor third item %ld\n", temp_dst[2]);
+  // printf("EEEEEEEsssssssselection_index_dst_tensor fourth item %ld\n", temp_dst[3]);
 
 
   // Launch the kernel.
-  dim3 grid(num_selected_pairs, block_mapping_src.size());
-  dim3 block(std::min(1024, numel_per_block));
+  //dim3 grid(num_selected_pairs, 1);
+  //dim3 grid(num_layers, block_mapping_src_number * 16);
+  const int num_heads = 12;
+  const int head_size = 64;
+  dim3 grid(num_layers, 64); //num_selected_pairs/num_layers
+  printf("num_layers %d, num_selected_pairs %d, block_mapping_src %d\n", num_layers, num_selected_pairs, block_mapping_src_number);
+  dim3 block(std::min(num_heads * head_size, 64)); //??
   const at::cuda::OptionalCUDAGuard device_guard(cache_device);
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
   VLLM_DISPATCH_FLOATING_AND_BYTE_TYPES(
@@ -456,15 +436,15 @@ void sparse_cache_copy(
       vllm::sparse_cache_copy_kernel<scalar_t><<<grid, block, 0, stream>>>(
         key_cache_ptrs_tensor.data_ptr<int64_t>(),
         value_cache_ptrs_tensor.data_ptr<int64_t>(),
-        block_mapping_src_tensor.data_ptr<int64_t>(),
-        block_mapping_dst_tensor.data_ptr<int64_t>(),
+        block_mapping_src_tensor_cuda.data_ptr<int64_t>(),
+        block_mapping_dst_tensor_cuda.data_ptr<int64_t>(),
         numel_per_block,
-        selection_index_src_tensor.data_ptr<int>(),
-        selection_index_dst_tensor.data_ptr<int>(),
+        selection_index_src_tensor_cuda.data_ptr<int64_t>(),
+        selection_index_dst_tensor_cuda.data_ptr<int64_t>(),
         num_selected_pairs);
     }));
+  printf("CUDA all completion\n");
 }
-
 
 namespace vllm {
 
@@ -489,30 +469,41 @@ __global__ void reshape_and_cache_kernel(
     return;
   }
 
-  const int64_t block_idx = slot_idx / block_size;
-  const int64_t block_offset = slot_idx % block_size;
+  const int64_t block_idx = slot_idx / block_size; // 22053
+  const int64_t block_offset = slot_idx % block_size; // 0, 1, 2...
 
-  const int n = num_heads * head_size;
+  const int n = num_heads * head_size; // 12*64 = 768
+  // 0 - 512
   for (int i = threadIdx.x; i < n; i += blockDim.x) {
     const int64_t src_key_idx = token_idx * key_stride + i;
     const int64_t src_value_idx = token_idx * value_stride + i;
 
+
+    // if (token_idx == 0 || token_idx == 1) {
+    //   printf("i %d, blockDim.x %d, src_key_idx %lld, src_value_idx %lld\n", i, blockDim.x, src_key_idx, src_value_idx);
+    // }
     const int head_idx = i / head_size;
     const int head_offset = i % head_size;
     const int x_idx = head_offset / x;
     const int x_offset = head_offset % x;
+    // if (token_idx == 0 || token_idx == 1) {
+    //   printf("i %d, head_idx %d, head_offset %d, x_idx %d, x_offset %d\n", i, head_idx, head_offset, x_idx, x_offset);
+    // }
 
     const int64_t tgt_key_idx = block_idx * num_heads * (head_size / x) * block_size * x
-                                + head_idx * (head_size / x) * block_size * x
-                                + x_idx * block_size * x
-                                + block_offset * x
+                                + head_idx * (head_size / x) * block_size * x // 1/12 head
+                                + x_idx * block_size * x // 1/8 x
+                                + block_offset * x // 1/16 block_size
                                 + x_offset;
     const int64_t tgt_value_idx = block_idx * num_heads * head_size * block_size
-                                  + head_idx * head_size * block_size
-                                  + head_offset * block_size
-                                  + block_offset;
+                                  + head_idx * head_size * block_size // 1/12 head
+                                  + head_offset * block_size // 1/64 head_size
+                                  + block_offset; // 1/16 block_size
     scalar_t tgt_key = key[src_key_idx];
     scalar_t tgt_value = value[src_value_idx];
+    // if (token_idx == 0 || token_idx == 1) {
+    //   printf("src_key_idx %lld, src_value_idx %lld, tgt_key_idx %lld, tgt_value_idx %lld, tgt_key %f, tgt_value %f\n", src_key_idx, src_value_idx, tgt_key_idx, tgt_value_idx, tgt_key, tgt_value);
+    // }
     if constexpr (kv_dt == Fp8KVCacheDataType::kAuto) {
       key_cache[tgt_key_idx] = tgt_key;
       value_cache[tgt_value_idx] = tgt_value;
@@ -601,6 +592,8 @@ void reshape_and_cache(
   const at::cuda::OptionalCUDAGuard device_guard(device_of(key));
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
+  printf("num_tokens %d, num_heads %d, head_size %d, block_size %d, x %d, key_stride %d, value_stride %d\n", num_tokens, num_heads, head_size, block_size, x, key_stride, value_stride);
+  
   DISPATCH_BY_KV_CACHE_DTYPE(key.dtype(), kv_cache_dtype, CALL_RESHAPE_AND_CACHE)
 }
 

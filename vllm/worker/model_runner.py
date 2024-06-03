@@ -784,11 +784,12 @@ class ModelRunner:
         # Currently cuda graph is only supported by the decode phase.
         prefill_meta = attn_metadata.prefill_metadata
         decode_meta = attn_metadata.decode_metadata
-        if prefill_meta is None and decode_meta.use_cuda_graph:
-            graph_batch_size = input_tokens.shape[0]
-            model_executable = self.graph_runners[graph_batch_size]
-        else:
-            model_executable = self.model
+        # ??
+        # if prefill_meta is None and decode_meta.use_cuda_graph:
+        #     graph_batch_size = input_tokens.shape[0]
+        #     model_executable = self.graph_runners[graph_batch_size]
+        # else:
+        model_executable = self.model
         execute_model_kwargs = {
             "input_ids": input_tokens,
             "positions": input_positions,

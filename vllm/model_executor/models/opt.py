@@ -98,6 +98,17 @@ class OPTAttention(nn.Module):
     ) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.chunk(chunks=3, dim=-1)
+        print("OOOOOOOPT")
+        print(qkv.shape)
+        print(qkv.dtype)
+        print(qkv.size(0))
+        print(qkv.stride(0))
+        print("QQQQQQQQKV")
+        print(k.shape)
+        print(k.dtype)
+        print(k.size(0))
+        print(k.stride(0))
+        print("OOOOOOPT end")
         attn_output = self.attn(q, k, v, kv_cache, attn_metadata)
         output, _ = self.out_proj(attn_output)
         return output
@@ -245,6 +256,7 @@ class OPTDecoder(nn.Module):
 
         for i in range(len(self.layers)):
             layer = self.layers[i]
+            # split layers to do
             hidden_states = layer(hidden_states, kv_caches[i], attn_metadata)
 
         if self.final_layer_norm is not None:
