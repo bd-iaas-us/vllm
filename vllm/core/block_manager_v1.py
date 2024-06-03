@@ -393,12 +393,12 @@ class BlockSpaceManagerV1(BlockSpaceManager):
     def create_new_slots(self, seq: Sequence) -> Tuple[List[Tuple[int, int]], List[int]]:
         # go through the block_table to see if block.ref_count == 1
         # if 1, self.gpu_allocator.free(block) to free the block
-        ret : List[Tuple[int, int]] = []
+        ret : List[Tuple[int, int]] = [] # ??
         block_table = self.block_tables[seq.seq_id].copy()
         for block in block_table:
             print("BBBBCreate " + str(block.block_number))
         # new_block_number = math.ceil(len(seq.logical_token_blocks) * 1.0) #?? 0.2
-        new_block_number = math.ceil(len(block_table) * 1.0) #?? 0.2
+        new_block_number = math.ceil(len(block_table) * 0.3) #?? 0.2 16 * 0.3 = 4.8 ~ 5
         # Will reuse cause trouble??
         new_block_table: BlockTable = []
         for i in range(new_block_number):

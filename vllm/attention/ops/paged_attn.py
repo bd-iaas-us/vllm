@@ -272,7 +272,7 @@ class PagedAttention:
         print(src_to_dists)
         print(src_to_dists[:, 0])
         print(src_to_dists[:, 1])
-        print(sparse_condition)
+        
         print(len(key_caches))
         print(len(value_caches))
         print(key_caches[0].shape)
@@ -283,22 +283,26 @@ class PagedAttention:
         print("WWWWTTTFFFFF")
         print(value_caches[0][-5:, :100])
         print("PPPPSPRASE end")
-        selection_index_src_v = []
-        selection_index_dst_v = []
-        dst_idx = 0
-        for src_idx, item in enumerate(sparse_condition):
-            selection_index_src_v.append(src_idx)
-            selection_index_dst_v.append(dst_idx)
-            dst_idx += 1
-        selection_index_src_tensor = torch.tensor(selection_index_src_v, dtype=torch.int64)
-        selection_index_dst_tensor = torch.tensor(selection_index_dst_v, dtype=torch.int64)
-        print("selection_index_src_tensor:", selection_index_src_tensor)
-        print("selection_index_dst_tensor:", selection_index_dst_tensor)
+        print(sparse_condition)
+        selection_index_src_tensor = torch.full((12, 4, 16), -1, dtype=torch.int64)
+        selection_index_dst_tensor = torch.full((12, 4, 16), -1, dtype=torch.int64)
+        for i, row in enumerate(sparse_condition): # 0-3
+            for j, value in enumerate(row):
+                count = 0
+                for k, num in enumerate(value):
+                    if num == 1:
+                        selection_index_src_tensor[i, j, k] = k + i * 64 + j * 16
+                        selection_index_dst_tensor[i, j, k] = count + i * 64 + j * 16
+                        count += 1
+        src_flatten = selection_index_src_tensor.flatten()
+        dst_flatten = selection_index_dst_tensor.flatten()
+        print("sssselection_index_src_tensor:", src_flatten)
+        print("sssselection_index_dst_tensor:", dst_flatten)
         block_mapping_src = src_to_dists[:, 0].to(torch.int64)
         block_mapping_dst = src_to_dists[:, 1].to(torch.int64)
         print(block_mapping_src)
-        print(block_mapping_dst)       
-        ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, selection_index_src_tensor, selection_index_dst_tensor)
+        print(block_mapping_dst)
+        ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, src_flatten, dst_flatten)
         print(key_caches[0][-9:, :100])
         print("WTFWTFWTFWTFWTF end")
         print(value_caches[0][-9:, :100])
