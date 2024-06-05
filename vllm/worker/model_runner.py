@@ -284,6 +284,11 @@ class ModelRunner:
             # NOTE(woosuk): Here we assume that the first token in the prompt
             # is always the first token in the sequence.
             input_positions.extend(list(range(context_len, seq_len)))
+            # print("Embedding tokens :")
+            # print(context_len)
+            # print(seq_len)
+            # for item in l:
+            #     print(item)
             lora_id = seq_group_metadata.lora_int_id
 
             if lora_id > 0:
@@ -467,6 +472,8 @@ class ModelRunner:
                 input_tokens.append(generation_token)
 
                 seq_len = seq_data.get_len()
+                if self.cache_config.sparse_cache_type == "h2o":
+                    seq_len = seq_len - 3
                 position = seq_len - 1
                 input_positions.append(position)
 
@@ -652,7 +659,10 @@ class ModelRunner:
             # Coalesce tensors. Note that attn_metadata is currently not
             # coalesced for simplicity.
             input_tokens.extend(decode_input_tokens)
+            print("input_positions")
+            print(len(input_positions))
             input_positions.extend(decode_input_positions)
+            print(len(decode_input_positions))
             slot_mapping.extend(decode_slot_mapping)
             lora_index_mapping.extend(decode_lora_index_mapping)
             lora_prompt_mapping.extend(decode_lora_prompt_mapping)
@@ -774,9 +784,18 @@ class ModelRunner:
         seq_group_metadata_list: List[SequenceGroupMetadata],
         kv_caches: List[torch.Tensor],
     ) -> Optional[SamplerOutput]:
+        print("execute_model starts")
+        if kv_caches[0] is not None:
+            print(kv_caches[0].shape)
+            print("execute_model middle")
+            #print(kv_caches[0][1][-5:, :100])
         (input_tokens, input_positions, attn_metadata, sampling_metadata,
          lora_requests, lora_mapping, multi_modal_input
          ) = self.prepare_input_tensors(seq_group_metadata_list)
+        if kv_caches[0] is not None:
+            print(kv_caches[0].shape)
+            print("execute_model middle")
+            #print(kv_caches[0][1][-5:, :100])
 
         if self.lora_config:
             self.set_active_loras(lora_requests, lora_mapping)
@@ -796,9 +815,14 @@ class ModelRunner:
             "kv_caches": kv_caches,
             "attn_metadata": attn_metadata,
         }
+        print("input_positions shape")
+        print(input_positions.shape)
+        print(input_positions)
         if self.vision_language_config:
             execute_model_kwargs.update({"image_input": multi_modal_input})
         hidden_states = model_executable(**execute_model_kwargs)
+        print("input_positions shape after")
+        print(hidden_states.shape)
 
         # Compute the logits.
         logits = self.model.compute_logits(hidden_states, sampling_metadata)

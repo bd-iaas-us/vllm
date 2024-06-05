@@ -200,40 +200,15 @@ class XFormersImpl(AttentionImpl):
             shape = [num_tokens, num_heads * head_size]
         """
         num_tokens, hidden_size = query.shape
-        print("YYYYYYFORMER")
         query = query.view(-1, self.num_heads, self.head_size)
-        print(key.shape)
-        print(key.dtype)
-        print(key.size(0))
-        print(key.stride(0))
         key = key.view(-1, self.num_kv_heads, self.head_size)
-        print(key.shape)
-        print(key.dtype)
-        print(key.size(0))
-        print(key.size(1))
-        print(key.size(2))
-        print(key.stride(0))
-        print(key.stride(1))
-        print(key.stride(2))
-        print("ZZZZZZFORMER")
         value = value.view(-1, self.num_kv_heads, self.head_size)
 
         if kv_cache is not None:
             key_cache, value_cache = PagedAttention.split_kv_cache(
                 kv_cache, self.num_kv_heads, self.head_size)
 
-            print("XXXFORMER")
-            torch.set_printoptions(threshold=float('inf'))
-            print(key.shape)
-            print(key.dtype)
-            print(key.size(0))
-            print(key.size(1))
-            print(key.size(2))
-            print(key.stride(0))
-            print(key.stride(1))
-            print(key.stride(2))
-            print("XXXFORMER end")
-            #print(key)
+            
             # Reshape the input keys and values and store them in the cache.
             # If kv_cache is not provided, the new key and value tensors are
             # not cached. This happens during the initial memory profiling run.
@@ -245,6 +220,11 @@ class XFormersImpl(AttentionImpl):
 
         num_prefill_tokens = attn_metadata.num_prefill_tokens
         num_decode_tokens = attn_metadata.num_decode_tokens
+        print("XFormersImpl forward")
+        print(key.shape[0])
+        print(value.shape[0])
+        print(num_prefill_tokens)
+        print(num_decode_tokens)
         assert key.shape[0] == num_prefill_tokens + num_decode_tokens
         assert value.shape[0] == num_prefill_tokens + num_decode_tokens
 
@@ -256,6 +236,9 @@ class XFormersImpl(AttentionImpl):
         key = key[:num_prefill_tokens]
         value = value[:num_prefill_tokens]
 
+        print("Query forward")
+        print(query.shape[0])
+        print(num_prefill_tokens)
         assert query.shape[0] == num_prefill_tokens
         assert decode_query.shape[0] == num_decode_tokens
 

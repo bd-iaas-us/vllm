@@ -68,29 +68,20 @@ class PagedAttention:
         kv_cache_dtype: str,
         kv_scale: float,
     ) -> None:
-        print("SSSSSSSLOT MAPPING")
         torch.set_printoptions(threshold=float('inf'))
+        print("write_to_paged_cache 11")
         print(key.shape)
-        print(key.dtype)
-        print(key.size(0))
-        print(key.size(1))
-        print(key.size(2))
-        print(key.stride(0))
-        print(key.stride(1))
-        print(key.stride(2))
-        #print(key)
-        print("TTTTSSLOT MAPPING")
         print(value.shape)
-        print(value.dtype)
-        print(value.size(0))
-        print(value.size(1))
-        print(value.size(2))
-        print(value.stride(0))
-        print(value.stride(1))
-        print(value.stride(2))
-        print("RRRRSSLOT MAPPING")
-        print(slot_mapping.shape)
+        print(key_cache.shape)
+        print(value_cache.shape)
+        #print(key_cache[-1,  :100])
+        # slot_mapping = slot_mapping - 1
         print(slot_mapping)
+        t = slot_mapping % 16
+        print(t)
+        # if t[0] == 6 or t[0] == 7:
+        #     print(value_cache[-5, -1, -1, :])
+        print("slot mapping")
         ops.reshape_and_cache(
             key,
             value,
@@ -100,6 +91,12 @@ class PagedAttention:
             kv_cache_dtype,
             kv_scale,
         )
+        print("write_to_paged_cache 2")
+        #print(key_cache.shape)
+        print(value_cache.shape)
+        #print(key_cache[-9:, :100])
+        # if t[0] == 6 or t[0] == 7:
+        #     print(value_cache[-5, -1, -1, :])
 
     @staticmethod
     def copy_to_paged_cache(

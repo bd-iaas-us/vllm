@@ -98,17 +98,13 @@ class OPTAttention(nn.Module):
     ) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.chunk(chunks=3, dim=-1)
-        print("OOOOOOOPT")
-        print(qkv.shape)
-        print(qkv.dtype)
-        print(qkv.size(0))
-        print(qkv.stride(0))
-        print("QQQQQQQQKV")
+        print("Forward")
+        print(q.shape)
         print(k.shape)
-        print(k.dtype)
-        print(k.size(0))
-        print(k.stride(0))
-        print("OOOOOOPT end")
+        print(v.shape)
+        if kv_cache is not None:
+            print("kv_cache shape")
+            print(kv_cache.shape)
         attn_output = self.attn(q, k, v, kv_cache, attn_metadata)
         output, _ = self.out_proj(attn_output)
         return output
@@ -248,11 +244,25 @@ class OPTDecoder(nn.Module):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
     ) -> torch.Tensor:
+        print("OPTDecoder forward start")
+        print(input_ids)
+        print(positions)
+        print(positions.shape)
+        # tensor([0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5], device='cuda:0') 
+        # tensor([6, 8, 6, 6], device='cuda:0')
+        # if positions.size(0) == 26:
+        #     positions = positions[1::2]
+        #     input_ids = input_ids[1::2]
+        #     print(positions)
+        #     print(input_ids)
         inputs_embeds = self.embed_tokens(input_ids)
         pos_embeds = self.embed_positions(positions)
         if self.project_in is not None:
             inputs_embeds, _ = self.project_in(inputs_embeds)
         hidden_states = inputs_embeds + pos_embeds
+        print("OPTDecoder forward in the middle")
+        # print(hidden_states[0])
+        print(hidden_states.shape)
 
         for i in range(len(self.layers)):
             layer = self.layers[i]
