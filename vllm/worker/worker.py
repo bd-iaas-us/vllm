@@ -89,6 +89,10 @@ class Worker(WorkerBase):
         self.cache_engine: CacheEngine
         # Initialize gpu_cache as embedding models don't initialize kv_caches
         self.gpu_cache: Optional[List[torch.tensor]] = None
+        
+        # ?? Uninitialized cache engine. Will be initialized by
+        # initialize_cache.
+        self.sparse_condition = torch.ones((12, 4, 16), dtype=torch.int64)
 
     def init_device(self) -> None:
         if self.device_config.device.type == "cuda":
@@ -217,7 +221,7 @@ class Worker(WorkerBase):
             print("TEMP")
             print(item[0])
             print(item[1])
-        if blocks_to_sparse_copy.numel() > 0:
+        if self.cache_config.sparse_cache_type == 'h2o' and blocks_to_sparse_copy.numel() > 0:
             self.cache_engine.sparse_cache_copy(blocks_to_sparse_copy, sparse_condition)
 
     @torch.inference_mode()
@@ -238,13 +242,12 @@ class Worker(WorkerBase):
         num_requests = 4
         # length = self.cache_engine.num_layers * self.cache_engine.block_size
         # sparse_condition = torch.ones(self.cache_engine.num_layers * self.cache_engine.block_size * 4) # 10001??
-        sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
-        for i in range(self.cache_engine.num_layers):
-            for j in range(num_requests):
-                for k in range(0, 16, 1): # 5 out of 16 ??
-                    sparse_condition[i, j, k] = 1
-        # print("NNNNNNNNNN")
-        print(sparse_condition)
+        # sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
+        # for i in range(self.cache_engine.num_layers):
+        #     for j in range(num_requests):
+        #         for k in range(0, 16, 1): # 5 out of 16 ??
+        #             sparse_condition[i, j, k] = 1
+        # print(sparse_condition)
         if self.is_driver_worker:
             assert seq_group_metadata_list is not None
             assert execute_model_req is not None
@@ -284,14 +287,20 @@ class Worker(WorkerBase):
             blocks_to_copy = data["blocks_to_copy"]
             blocks_to_sparse_copy = data["blocks_to_sparse_copy"]
 
-        self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy, blocks_to_sparse_copy, sparse_condition)
+        self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy, blocks_to_sparse_copy, self.sparse_condition)
 
         # If there is no input, we don't need to execute the model.
         if num_seq_groups == 0:
             return []
+        
+        # print("BEFOREEEE")
+        # print(self.sparse_condition)
+        self.sparse_condition = torch.zeros((self.cache_engine.num_layers, 4, self.cache_engine.block_size), dtype=torch.int64)
 
         output = self.model_runner.execute_model(seq_group_metadata_list,
-                                                 self.gpu_cache, sparse_condition=None)
+                                                 self.gpu_cache, sparse_condition=self.sparse_condition)
+        # print("AFTERRRRR")
+        # print(self.sparse_condition)
 
         # Worker only supports single-step execution. Wrap the output in a list
         # to conform to interface.

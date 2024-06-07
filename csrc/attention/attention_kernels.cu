@@ -264,9 +264,9 @@ __device__ void paged_attention_kernel(
 
         int score_idx = seq_idx * block_size * num_heads + token_idx * num_heads + head_idx;
         if (!mask) {
-          //printf("score_idx %d , seq_idx %d, token_idx %d, head_idx %d, token_idx - start_token_idx %d. ", score_idx, seq_idx, token_idx, head_idx, token_idx - start_token_idx);
+          // printf("score_idx %d , seq_idx %d, token_idx %d, head_idx %d, token_idx - start_token_idx %d. ", score_idx, seq_idx, token_idx, head_idx, token_idx - start_token_idx);
           attention_scores[score_idx] = logits[token_idx - start_token_idx];
-          //printf("attention_scores[%d]: %f", score_idx, attention_scores[score_idx]);
+          // printf("attention_scores[%d]: %f", score_idx, attention_scores[score_idx]);
         }
         //printf("Checkpoint 2 kernel update");
       }

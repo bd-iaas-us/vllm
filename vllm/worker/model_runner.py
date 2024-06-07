@@ -786,6 +786,8 @@ class ModelRunner:
         sparse_condition: Optional[torch.Tensor],
     ) -> Optional[SamplerOutput]:
         print("execute_model starts")
+        if sparse_condition is None:
+            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
         if kv_caches[0] is not None:
             print(kv_caches[0].shape)
             print("execute_model middle")
@@ -825,6 +827,7 @@ class ModelRunner:
         hidden_states = model_executable(**execute_model_kwargs)
         print("input_positions shape after")
         print(hidden_states.shape)
+        # print(sparse_condition)
 
         # Compute the logits.
         logits = self.model.compute_logits(hidden_states, sampling_metadata)

@@ -95,8 +95,8 @@ class PagedAttention:
         #print(key_cache.shape)
         print(value_cache.shape)
         #print(key_cache[-9:, :100])
-        # if t[0] == 6 or t[0] == 7: # ??
-        #     print(value_cache[-5, -1, -1, :])
+        if t[0] == 6 or t[0] == 7 or t[0] == 4 or t[0] == 5 or t[0] == 3: # ??
+            print(value_cache[-5, -1, -1, :])
 
     @staticmethod
     def copy_to_paged_cache(
@@ -151,7 +151,7 @@ class PagedAttention:
             # print("EEEEEEEEEEEEEEEEEEEEE")
             if sparse_condition is None: # ??
                 # print("FFFFFFFFFFFFFFFFFFFFF")
-                sparse_condition = torch.zeros(768, dtype=torch.float)
+                sparse_condition = torch.zeros(768, dtype=torch.float32)
             # Run PagedAttention V1.
             ops.paged_attention_v1(
                 output,
@@ -170,7 +170,7 @@ class PagedAttention:
                 sparse_cache_type,
                 sparse_condition,
             )
-            print("After updated tensor")
+            # print("After updated tensor")
             # print(sparse_condition)
         else:
             # Run PagedAttention V2.
