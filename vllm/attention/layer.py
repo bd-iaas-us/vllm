@@ -44,9 +44,13 @@ class Attention(nn.Module):
         kv_cache: Optional[torch.Tensor],
         attn_metadata: AttentionMetadata[AttentionMetadataPerStage],
         kv_scale: float = 1.0,
+        sparse_condition: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        print("FFFFFFFFFFF")
+        print(kv_scale)
+        print(sparse_condition)
         return self.impl.forward(query, key, value, kv_cache, attn_metadata,
-                                 kv_scale)
+                                 kv_scale, sparse_condition)
 
     def extra_repr(self) -> str:
         s = f"head_size={self.impl.head_size}"  # type: ignore

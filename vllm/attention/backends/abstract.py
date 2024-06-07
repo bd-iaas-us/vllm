@@ -130,5 +130,6 @@ class AttentionImpl(ABC):
         kv_cache: torch.Tensor,
         attn_metadata: AttentionMetadata,
         kv_scale: float,
+        sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
         raise NotImplementedError

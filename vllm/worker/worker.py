@@ -241,9 +241,9 @@ class Worker(WorkerBase):
         sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
         for i in range(self.cache_engine.num_layers):
             for j in range(num_requests):
-                for k in range(0, 16, 2): # 5 out of 16 ??
+                for k in range(0, 16, 1): # 5 out of 16 ??
                     sparse_condition[i, j, k] = 1
-        print("NNNNNNNNNN")
+        # print("NNNNNNNNNN")
         print(sparse_condition)
         if self.is_driver_worker:
             assert seq_group_metadata_list is not None
@@ -291,7 +291,7 @@ class Worker(WorkerBase):
             return []
 
         output = self.model_runner.execute_model(seq_group_metadata_list,
-                                                 self.gpu_cache)
+                                                 self.gpu_cache, sparse_condition=None)
 
         # Worker only supports single-step execution. Wrap the output in a list
         # to conform to interface.

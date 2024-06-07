@@ -472,8 +472,8 @@ class ModelRunner:
                 input_tokens.append(generation_token)
 
                 seq_len = seq_data.get_len()
-                if self.cache_config.sparse_cache_type == "h2o":
-                    seq_len = seq_len - 3
+                # if self.cache_config.sparse_cache_type == "h2o":
+                #     seq_len = seq_len - 3 # ??
                 position = seq_len - 1
                 input_positions.append(position)
 
@@ -783,6 +783,7 @@ class ModelRunner:
         self,
         seq_group_metadata_list: List[SequenceGroupMetadata],
         kv_caches: List[torch.Tensor],
+        sparse_condition: Optional[torch.Tensor],
     ) -> Optional[SamplerOutput]:
         print("execute_model starts")
         if kv_caches[0] is not None:
@@ -814,6 +815,7 @@ class ModelRunner:
             "positions": input_positions,
             "kv_caches": kv_caches,
             "attn_metadata": attn_metadata,
+            "sparse_condition": sparse_condition,
         }
         print("input_positions shape")
         print(input_positions.shape)
@@ -903,7 +905,7 @@ class ModelRunner:
         # Run the model with the dummy inputs.
         num_layers = self.model_config.get_num_layers(self.parallel_config)
         kv_caches = [None] * num_layers
-        self.execute_model(seqs, kv_caches)
+        self.execute_model(seqs, kv_caches, None)
         torch.cuda.synchronize()
         return
 

@@ -16,7 +16,8 @@ void paged_attention_v1(
   const c10::optional<torch::Tensor>& alibi_slopes,
   const std::string& kv_cache_dtype,
   float kv_scale,
-  const std::string& sparse_cache_type);
+  const std::string& sparse_cache_type,
+  torch::Tensor& attention_scores);
 
 void paged_attention_v2(
   torch::Tensor& out,
@@ -35,7 +36,8 @@ void paged_attention_v2(
   const c10::optional<torch::Tensor>& alibi_slopes,
   const std::string& kv_cache_dtype,
   float kv_scale,
-  const std::string& sparse_cache_type);
+  const std::string& sparse_cache_type,
+  torch::Tensor& attention_scores);
 
 void rms_norm(
   torch::Tensor& out,

@@ -95,6 +95,7 @@ class OPTAttention(nn.Module):
         hidden_states: torch.Tensor,
         kv_cache: torch.Tensor,
         attn_metadata: AttentionMetadata,
+        sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.chunk(chunks=3, dim=-1)
@@ -105,7 +106,7 @@ class OPTAttention(nn.Module):
         if kv_cache is not None:
             print("kv_cache shape")
             print(kv_cache.shape)
-        attn_output = self.attn(q, k, v, kv_cache, attn_metadata)
+        attn_output = self.attn(q, k, v, kv_cache, attn_metadata) #?? kv_scale, sparse_condition??
         output, _ = self.out_proj(attn_output)
         return output
 
@@ -154,6 +155,7 @@ class OPTDecoderLayer(nn.Module):
         hidden_states: torch.Tensor,
         kv_cache: torch.Tensor,
         attn_metadata: AttentionMetadata,
+        sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
         # Self Attention
         residual = hidden_states
@@ -162,7 +164,8 @@ class OPTDecoderLayer(nn.Module):
             hidden_states = self.self_attn_layer_norm(hidden_states)
         hidden_states = self.self_attn(hidden_states=hidden_states,
                                        kv_cache=kv_cache,
-                                       attn_metadata=attn_metadata)
+                                       attn_metadata=attn_metadata,
+                                       sparse_condition=sparse_condition)
         hidden_states = residual + hidden_states
         # 350m applies layer norm AFTER attention
         if not self.do_layer_norm_before:
@@ -243,6 +246,7 @@ class OPTDecoder(nn.Module):
         positions: torch.Tensor,
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
+        sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
         print("OPTDecoder forward start")
         print(input_ids)
@@ -267,7 +271,7 @@ class OPTDecoder(nn.Module):
         for i in range(len(self.layers)):
             layer = self.layers[i]
             # split layers to do
-            hidden_states = layer(hidden_states, kv_caches[i], attn_metadata)
+            hidden_states = layer(hidden_states, kv_caches[i], attn_metadata, sparse_condition) # layer? ??
 
         if self.final_layer_norm is not None:
             hidden_states = self.final_layer_norm(hidden_states)
@@ -292,8 +296,9 @@ class OPTModel(nn.Module):
         positions: torch.Tensor,
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
+        sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
-        return self.decoder(input_ids, positions, kv_caches, attn_metadata)
+        return self.decoder(input_ids, positions, kv_caches, attn_metadata, sparse_condition)
 
 
 class OPTForCausalLM(nn.Module):
@@ -317,9 +322,10 @@ class OPTForCausalLM(nn.Module):
         positions: torch.Tensor,
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
+        sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
         hidden_states = self.model(input_ids, positions, kv_caches,
-                                   attn_metadata)
+                                   attn_metadata, sparse_condition)
         return hidden_states
 
     def compute_logits(self, hidden_states: torch.Tensor,

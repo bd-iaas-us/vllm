@@ -107,7 +107,8 @@ __device__ void paged_attention_kernel(
   const int kv_block_stride,
   const int kv_head_stride,
   const float kv_scale,
-  const std::string& sparse_cache_type) {
+  const std::string& sparse_cache_type,
+  float* __restrict__ attention_scores) {
   const int seq_idx = blockIdx.y;
   const int partition_idx = blockIdx.z;
   const int max_num_partitions = gridDim.z;
@@ -145,6 +146,10 @@ __device__ void paged_attention_kernel(
   const int num_queries_per_kv = num_heads / num_kv_heads;
   const int kv_head_idx = head_idx / num_queries_per_kv;
   const float alibi_slope = alibi_slopes == nullptr ? 0.f : alibi_slopes[head_idx];
+  // if (seq_idx == 0 && head_idx == 0) {
+  //   printf("blockIdx.x %d, blockIdx.y %d, blockIdx.z %d, thread_idx %d, warp_idx %d, lane %d", blockIdx.x, blockIdx.y, blockIdx.z, thread_idx, warp_idx, lane);
+  //   printf("num_heads %d, num_kv_heads %d, num_queries_per_kv %d, kv_head_idx %d", num_heads, num_kv_heads, num_queries_per_kv, kv_head_idx);
+  // }
 
   // A vector type to store a part of a key or a query.
   // The vector size is configured in such a way that the threads in a thread group
@@ -161,6 +166,9 @@ __device__ void paged_attention_kernel(
 
   const int thread_group_idx = thread_idx / THREAD_GROUP_SIZE;
   const int thread_group_offset = thread_idx % THREAD_GROUP_SIZE;
+
+  // size is request * block * head_size
+  const int block_size = 16;
 
   // Load the query to registers.
   // Each thread in a thread group has a different part of the query.
@@ -194,6 +202,7 @@ __device__ void paged_attention_kernel(
   // Each thread group in a warp fetches a key from the block, and computes
   // dot product with the query.
   const int* block_table = block_tables + seq_idx * max_num_blocks_per_seq;
+  // float qkqk = 0;
   for (int block_idx = start_block_idx + warp_idx; block_idx < end_block_idx; block_idx += NUM_WARPS) {
     // NOTE(woosuk): The block number is stored in int32. However, we cast it to int64
     // because int32 can lead to overflow when this variable is multiplied by large numbers
@@ -205,6 +214,10 @@ __device__ void paged_attention_kernel(
     // For example, if the the thread group size is 4, then the first thread in the group
     // has 0, 4, 8, ... th vectors of the key, and the second thread has 1, 5, 9, ... th
     // vectors of the key, and so on.
+    // if (seq_idx == 0 && head_idx == 0) {
+    //   printf("NUM_TOKENS_PER_THREAD_GROUP %d, block_idx %d, end_block_idx %d, NUM_WARPS %d", NUM_TOKENS_PER_THREAD_GROUP, block_idx, end_block_idx, NUM_WARPS);
+    // }
+    
     for (int i = 0; i < NUM_TOKENS_PER_THREAD_GROUP; i++) {
       const int physical_block_offset = (thread_group_idx + i * WARP_SIZE) % BLOCK_SIZE;
       const int token_idx = block_idx * BLOCK_SIZE + physical_block_offset;
@@ -229,22 +242,48 @@ __device__ void paged_attention_kernel(
         }
       }
 
+      // if (seq_idx == 0 && head_idx == 0) {
+      //   printf("physical_block_number %lld, block_idx %d, NUM_TOKENS_PER_THREAD_GROUP %d, NUM_VECS_PER_THREAD %d, thread_group_offset %d", physical_block_number, block_idx, NUM_TOKENS_PER_THREAD_GROUP, NUM_VECS_PER_THREAD, thread_group_offset);
+      // }
+
       // Compute dot product.
       // This includes a reduction across the threads in the same thread group.
       float qk = scale * Qk_dot<scalar_t, THREAD_GROUP_SIZE>::dot(q_vecs[thread_group_offset], k_vecs);
       // Add the ALiBi bias if slopes are given.
       qk += (alibi_slope != 0) ? alibi_slope * (token_idx - seq_len + 1) : 0;
 
+      //printf("Before kernel update");
       if (thread_group_offset == 0) {
+        //printf("Checkpoint 1 kernel update");
         // Store the partial reductions to shared memory.
         // NOTE(woosuk): It is required to zero out the masked logits.
         const bool mask = token_idx >= seq_len;
         logits[token_idx - start_token_idx] = mask ? 0.f : qk;
         // Update the max value.
         qk_max = mask ? qk_max : fmaxf(qk_max, qk);
+
+        int score_idx = seq_idx * block_size * num_heads + token_idx * num_heads + head_idx;
+        if (!mask) {
+          //printf("score_idx %d , seq_idx %d, token_idx %d, head_idx %d, token_idx - start_token_idx %d. ", score_idx, seq_idx, token_idx, head_idx, token_idx - start_token_idx);
+          attention_scores[score_idx] = logits[token_idx - start_token_idx];
+          //printf("attention_scores[%d]: %f", score_idx, attention_scores[score_idx]);
+        }
+        //printf("Checkpoint 2 kernel update");
       }
+      //printf("After kernel update");
+      //printf("qk %f", qk);
+      // if (seq_idx == 0 && head_idx == 0) {
+      //   printf("qk %f", qk);
+      // }
+      // qkqk = ((qkqk * i) + qk) / (i + 1);
     }
   }
+  // if (seq_idx == 0 && head_idx == 0) {
+  //     //printf("qkqk %f", qkqk);
+  //     for (int m = 0; m < 16; m ++) {
+  //       printf("logits[%d] %f ", m, logits[m]);
+  //     }
+  // }
 
   // Perform reduction across the threads in the same warp to get the
   // max qk value for each "warp" (not across the thread block yet).
@@ -442,11 +481,12 @@ __global__ void paged_attention_v1_kernel(
   const int kv_block_stride,
   const int kv_head_stride,
   const float kv_scale,
-  const std::string& sparse_cache_type) {
+  const std::string& sparse_cache_type,
+  float* __restrict__ attention_scores) {
   paged_attention_kernel<scalar_t, cache_t, HEAD_SIZE, BLOCK_SIZE, NUM_THREADS, KV_DTYPE>(
     /* exp_sums */ nullptr, /* max_logits */ nullptr,
     out, q, k_cache, v_cache, num_kv_heads, scale, block_tables, seq_lens,
-    max_num_blocks_per_seq, alibi_slopes, q_stride, kv_block_stride, kv_head_stride, kv_scale, sparse_cache_type);
+    max_num_blocks_per_seq, alibi_slopes, q_stride, kv_block_stride, kv_head_stride, kv_scale, sparse_cache_type, attention_scores);
 }
 
 // Grid: (num_heads, num_seqs, max_num_partitions).
@@ -475,11 +515,12 @@ __global__ void paged_attention_v2_kernel(
   const int kv_block_stride,
   const int kv_head_stride,
   const float kv_scale,
-  const std::string& sparse_cache_type) {
+  const std::string& sparse_cache_type,
+  float* __restrict__ attention_scores) {
   paged_attention_kernel<scalar_t, cache_t, HEAD_SIZE, BLOCK_SIZE, NUM_THREADS, KV_DTYPE, PARTITION_SIZE>(
     exp_sums, max_logits, tmp_out, q, k_cache, v_cache, num_kv_heads, scale,
     block_tables, seq_lens, max_num_blocks_per_seq, alibi_slopes,
-    q_stride, kv_block_stride, kv_head_stride, kv_scale, sparse_cache_type);
+    q_stride, kv_block_stride, kv_head_stride, kv_scale, sparse_cache_type, attention_scores);
 }
 
 // Grid: (num_heads, num_seqs).
@@ -495,7 +536,8 @@ __global__ void paged_attention_v2_reduce_kernel(
   const scalar_t* __restrict__ tmp_out,   // [num_seqs, num_heads, max_num_partitions, head_size]
   const int* __restrict__ seq_lens,   // [num_seqs]
   const int max_num_partitions,
-  const std::string& sparse_cache_type) {
+  const std::string& sparse_cache_type,
+  float* __restrict__ attention_scores) {
   const int num_heads = gridDim.x;
   const int head_idx = blockIdx.x;
   const int seq_idx = blockIdx.y;
@@ -604,7 +646,8 @@ __global__ void paged_attention_v2_reduce_kernel(
     kv_block_stride,                                                                          \
     kv_head_stride,                                                                           \
     kv_scale,                                                                                 \
-    sparse_cache_type);
+    sparse_cache_type,                                                                        \
+    attention_scores_ptr);
 
 // TODO(woosuk): Tune NUM_THREADS.
 template<
@@ -625,7 +668,8 @@ void paged_attention_v1_launcher(
   int max_seq_len,
   const c10::optional<torch::Tensor>& alibi_slopes,
   float kv_scale,
-  const std::string& sparse_cache_type) {
+  const std::string& sparse_cache_type,
+  torch::Tensor& attention_scores) {
   int num_seqs = query.size(0);
   int num_heads = query.size(1);
   int head_size = query.size(2);
@@ -649,6 +693,14 @@ void paged_attention_v1_launcher(
   int* block_tables_ptr = block_tables.data_ptr<int>();
   int* seq_lens_ptr = seq_lens.data_ptr<int>();
 
+  torch::Device cache_device = key_cache.device();
+  TORCH_CHECK(cache_device.is_cuda());
+  torch::Device cpu_device = attention_scores.device();
+  TORCH_CHECK(cpu_device.is_cpu());
+  torch::Tensor attention_scores_tensor = attention_scores.to(cache_device);
+  printf("Launcher attention_scores size %d\n", attention_scores_tensor.size(0));
+  float* attention_scores_ptr = reinterpret_cast<float*>(attention_scores_tensor.data_ptr());
+
   constexpr int NUM_WARPS = NUM_THREADS / WARP_SIZE;
   int padded_max_seq_len = DIVIDE_ROUND_UP(max_seq_len, BLOCK_SIZE) * BLOCK_SIZE;
   int logits_size = padded_max_seq_len * sizeof(float);
@@ -657,8 +709,9 @@ void paged_attention_v1_launcher(
   // Keep that in sync with the logic here!
   int shared_mem_size = std::max(logits_size, outputs_size);
 
-  dim3 grid(num_heads, num_seqs, 1);
-  dim3 block(NUM_THREADS);
+  dim3 grid(num_heads, num_seqs, 1); // 12, 4, 1
+  dim3 block(NUM_THREADS); // 128
+  printf("num_heads %d, num_seqs %d NUM_THREADS %d, scale %f\n", num_heads, num_seqs, NUM_THREADS, scale);
   const at::cuda::OptionalCUDAGuard device_guard(device_of(query));
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
   switch (head_size) {
@@ -687,6 +740,11 @@ void paged_attention_v1_launcher(
       TORCH_CHECK(false, "Unsupported head size: ", head_size);
       break;
   }
+  //printf("Before assignment\n");
+  //printf("Attention scores PUG %f\n", attention_scores_tensor[0].item<float>());
+  attention_scores.copy_(attention_scores_tensor.to(cpu_device));
+  //printf("Attention scores PUC %f\n", attention_scores[0].item<float>());
+  //printf("After assignment\n");
 }
 
 #define CALL_V1_LAUNCHER(T, CACHE_T, BLOCK_SIZE, KV_DTYPE)            \
@@ -702,7 +760,8 @@ void paged_attention_v1_launcher(
     max_seq_len,                                                      \
     alibi_slopes,                                                     \
     kv_scale,                                                         \
-    sparse_cache_type);
+    sparse_cache_type,                                                \
+    attention_scores);
 
 // NOTE(woosuk): To reduce the compilation time, we omitted block sizes
 // 1, 2, 4, 64, 128, 256.
@@ -736,7 +795,8 @@ void paged_attention_v1(
   const c10::optional<torch::Tensor>& alibi_slopes,
   const std::string& kv_cache_dtype,
   float kv_scale,
-  const std::string& sparse_cache_type) {
+  const std::string& sparse_cache_type,
+  torch::Tensor& attention_scores) {
   
   DISPATCH_BY_KV_CACHE_DTYPE(query.dtype(), kv_cache_dtype, CALL_V1_LAUNCHER_BLOCK_SIZE)
 }
@@ -761,7 +821,8 @@ void paged_attention_v1(
     kv_block_stride,                                                                   \
     kv_head_stride,                                                                    \
     kv_scale,                                                                          \
-    sparse_cache_type);                                                                \
+    sparse_cache_type,                                                                 \
+    attention_scores_ptr);                                                             \
   vllm::paged_attention_v2_reduce_kernel<T, HEAD_SIZE, NUM_THREADS, PARTITION_SIZE>    \
   <<<reduce_grid, block, reduce_shared_mem_size, stream>>>(                            \
     out_ptr,                                                                           \
@@ -770,7 +831,8 @@ void paged_attention_v1(
     tmp_out_ptr,                                                                       \
     seq_lens_ptr,                                                                      \
     max_num_partitions,                                                                \
-    sparse_cache_type);
+    sparse_cache_type,                                                                 \
+    attention_scores_ptr);
 
 template<
   typename T,
@@ -794,7 +856,8 @@ void paged_attention_v2_launcher(
   int max_seq_len,
   const c10::optional<torch::Tensor>& alibi_slopes,
   float kv_scale,
-  const std::string& sparse_cache_type) {
+  const std::string& sparse_cache_type,
+  torch::Tensor& attention_scores) {
   int num_seqs = query.size(0);
   int num_heads = query.size(1);
   int head_size = query.size(2);
@@ -820,6 +883,14 @@ void paged_attention_v2_launcher(
   CACHE_T* value_cache_ptr = reinterpret_cast<CACHE_T*>(value_cache.data_ptr());
   int* block_tables_ptr = block_tables.data_ptr<int>();
   int* seq_lens_ptr = seq_lens.data_ptr<int>();
+
+  torch::Device cache_device = key_cache.device();
+  TORCH_CHECK(cache_device.is_cuda());
+  torch::Device cpu_device = attention_scores.device();
+  TORCH_CHECK(cpu_device.is_cpu());
+  torch::Tensor attention_scores_tensor = attention_scores.to(cache_device);
+  printf("Launcher attention_scores size %d\n", attention_scores_tensor.size(0));
+  float* attention_scores_ptr = reinterpret_cast<float*>(attention_scores_tensor.data_ptr());
 
   constexpr int NUM_WARPS = NUM_THREADS / WARP_SIZE;
   int max_num_partitions = DIVIDE_ROUND_UP(max_seq_len, PARTITION_SIZE);
@@ -862,6 +933,7 @@ void paged_attention_v2_launcher(
       TORCH_CHECK(false, "Unsupported head size: ", head_size);
       break;
   }
+  attention_scores.copy_(attention_scores_tensor.to(cpu_device));
 }
 
 #define CALL_V2_LAUNCHER(T, CACHE_T, BLOCK_SIZE, KV_DTYPE)                \
@@ -880,7 +952,8 @@ void paged_attention_v2_launcher(
     max_seq_len,                                                          \
     alibi_slopes,                                                         \
     kv_scale,                                                             \
-    sparse_cache_type);
+    sparse_cache_type,                                                    \
+    attention_scores);
 
 // NOTE(woosuk): To reduce the compilation time, we omitted block sizes
 // 1, 2, 4, 64, 128, 256.
@@ -917,7 +990,8 @@ void paged_attention_v2(
   const c10::optional<torch::Tensor>& alibi_slopes,
   const std::string& kv_cache_dtype,
   float kv_scale,
-  const std::string& sparse_cache_type) {
+  const std::string& sparse_cache_type,
+  torch::Tensor& attention_scores) {
   DISPATCH_BY_KV_CACHE_DTYPE(query.dtype(), kv_cache_dtype, CALL_V2_LAUNCHER_BLOCK_SIZE)
 }
 

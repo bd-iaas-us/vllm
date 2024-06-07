@@ -68,7 +68,7 @@ class PagedAttention:
         kv_cache_dtype: str,
         kv_scale: float,
     ) -> None:
-        torch.set_printoptions(threshold=float('inf'))
+        # torch.set_printoptions(threshold=float('inf'))
         print("write_to_paged_cache 11")
         print(key.shape)
         print(value.shape)
@@ -95,7 +95,7 @@ class PagedAttention:
         #print(key_cache.shape)
         print(value_cache.shape)
         #print(key_cache[-9:, :100])
-        # if t[0] == 6 or t[0] == 7:
+        # if t[0] == 6 or t[0] == 7: # ??
         #     print(value_cache[-5, -1, -1, :])
 
     @staticmethod
@@ -130,6 +130,7 @@ class PagedAttention:
         alibi_slopes: Optional[torch.Tensor],
         kv_scale: float,
         sparse_cache_type: str,
+        sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
         output = torch.empty_like(query)
 
@@ -147,6 +148,10 @@ class PagedAttention:
         use_v1 = (max_seq_len <= 8192
                   and (max_num_partitions == 1 or num_seqs * num_heads > 512))
         if use_v1:
+            # print("EEEEEEEEEEEEEEEEEEEEE")
+            if sparse_condition is None: # ??
+                # print("FFFFFFFFFFFFFFFFFFFFF")
+                sparse_condition = torch.zeros(768, dtype=torch.float)
             # Run PagedAttention V1.
             ops.paged_attention_v1(
                 output,
@@ -163,7 +168,10 @@ class PagedAttention:
                 kv_cache_dtype,
                 kv_scale,
                 sparse_cache_type,
+                sparse_condition,
             )
+            print("After updated tensor")
+            # print(sparse_condition)
         else:
             # Run PagedAttention V2.
             assert _PARTITION_SIZE % block_size == 0
@@ -196,6 +204,7 @@ class PagedAttention:
                 kv_cache_dtype,
                 kv_scale,
                 sparse_cache_type,
+                sparse_condition,
             )
         return output
 
@@ -276,9 +285,9 @@ class PagedAttention:
         print(value_caches[0].shape)
         # print("PPPPPSPRASE")
         torch.set_printoptions(threshold=float('inf'))
-        print(key_caches[0][-5:, :100])
+        #print(key_caches[0][-5:, :100])
         print("WWWWTTTFFFFF")
-        print(value_caches[0][-5:, :100])
+        #print(value_caches[0][-5:, :100])
         print("PPPPSPRASE end")
         print(sparse_condition)
         selection_index_src_tensor = torch.full((12, 4, 16), -1, dtype=torch.int64)
@@ -300,6 +309,6 @@ class PagedAttention:
         print(block_mapping_src)
         print(block_mapping_dst)
         ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, src_flatten, dst_flatten)
-        print(key_caches[0][-9:, :100])
+        #print(key_caches[0][-9:, :100])
         print("WTFWTFWTFWTFWTF end")
-        print(value_caches[0][-9:, :100])
+        #print(value_caches[0][-9:, :100])
