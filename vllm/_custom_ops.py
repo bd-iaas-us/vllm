@@ -265,7 +265,9 @@ def reshape_and_cache_flash(
 
 
 def sparse_cache_copy(key_caches: torch.Tensor, value_caches: torch.Tensor,
-                block_mapping_src: torch.Tensor, block_mapping_dst: torch.Tensor, selection_index_src_tensor: torch.Tensor, selection_index_dst_tensor: torch.Tensor) -> None:
+                block_mapping_src: torch.Tensor, block_mapping_dst: torch.Tensor, 
+                selection_index_src_tensor: torch.Tensor, selection_index_dst_tensor: torch.Tensor,
+                num_heads: int, head_size: int, block_size: int) -> None:
     """
     const std::vector<torch::Tensor>& src,
     std::vector<torch::Tensor>& target,
@@ -280,7 +282,7 @@ def sparse_cache_copy(key_caches: torch.Tensor, value_caches: torch.Tensor,
     """
     # block_mapping_src = block_mapping[:, 0].tolist()
     # block_mapping_dst = block_mapping[:, 1].tolist()
-    vllm_cache_ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, selection_index_src_tensor, selection_index_dst_tensor)
+    vllm_cache_ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, selection_index_src_tensor, selection_index_dst_tensor, num_heads, head_size, block_size)
 
 def copy_blocks(key_caches: torch.Tensor, value_caches: torch.Tensor,
                 block_mapping: torch.Tensor) -> None:

@@ -390,18 +390,25 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         return new_block
 
     # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
-    def create_new_slots(self, seq: Sequence) -> Tuple[List[Tuple[int, int]], List[int]]:
+    def create_new_slots(self, seq: Sequence) -> Tuple[List[List[int]], List[int]]:
         # go through the block_table to see if block.ref_count == 1
         # if 1, self.gpu_allocator.free(block) to free the block
-        ret : List[Tuple[int, int]] = [] # ??
+        # List[List[int]]
+        ret : List[List[int]] = []
         block_table = self.block_tables[seq.seq_id].copy()
         for block in block_table:
+            if not ret:
+                ret.append([])
+            ret[0].append(block.block_number)
             print("BBBBCreate " + str(block.block_number))
         # new_block_number = math.ceil(len(seq.logical_token_blocks) * 1.0) #?? 0.2
         new_block_number = math.ceil(len(block_table) * 0.3) #?? 0.2 16 * 0.3 = 4.8 ~ 5
+        if len(ret) == 1:
+            ret.append([])
         # Will reuse cause trouble??
         new_block_table: BlockTable = []
         for i in range(new_block_number):
+            assert len(ret) == 2
             if (self.block_sliding_window
                     and len(block_table) >= self.block_sliding_window):
                 # reuse a block
@@ -414,7 +421,8 @@ class BlockSpaceManagerV1(BlockSpaceManager):
                 print("DDDDDD NEW "+ str(new_block.block_number))
                 # new_block.ref_count = 1 # seq_group.num_seqs()
                 new_block_table.append(new_block)
-                ret.append((block_table[i].block_number, new_block.block_number))
+                ret[1].append(new_block.block_number)
+                #ret.append((block_table[i].block_number, new_block.block_number))
         self.block_tables[seq.seq_id] = new_block_table.copy()
         # for block in block_table:
         # #     # block.ref_count -= 1
@@ -423,10 +431,12 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         #     self.gpu_allocator.free(block)
         # what about v2??
         print("create_new_slots")
-        for item in ret:
-            print("item")
-            print(item[0])
-            print(item[1])
+        print(ret)
+        # for item in ret:
+        #     print("item")
+        #     print(item)
+            # print(item[0])
+            # print(item[1])
         # Update the block table for this new KV cache slots.
         return (ret, block_table)
 

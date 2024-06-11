@@ -81,20 +81,16 @@ void reshape_and_cache_cpu_impl(
 }
 }; // namespace
 
-// void sparse_cache_copy(
-//   const std::vector<torch::Tensor>& key_caches,
-//   std::vector<torch::Tensor>& value_caches,
-//   const torch::Tensor& block_mapping,
-//   const std::vector<torch::Tensor>& selection) {
-//     return; //??
-// }
 void sparse_cache_copy(
   std::vector<torch::Tensor>& key_caches,
   std::vector<torch::Tensor>& value_caches,
   const torch::Tensor& block_mapping_src_tensor,
   const torch::Tensor& block_mapping_dst_tensor,
   const torch::Tensor& selection_index_src_tensor,
-  const torch::Tensor& selection_index_dst_tensor) {
+  const torch::Tensor& selection_index_dst_tensor,
+  const int num_heads,
+  const int head_size,
+  const int block_size) {
     return; //??
   }
 

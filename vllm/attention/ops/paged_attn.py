@@ -48,7 +48,7 @@ class PagedAttention:
         num_kv_heads: int,
         head_size: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = 16 // kv_cache.element_size()
+        x = 16 // kv_cache.element_size() # ??
         num_blocks = kv_cache.shape[1]
 
         key_cache = kv_cache[0]
@@ -270,14 +270,19 @@ class PagedAttention:
         kv_caches: List[torch.Tensor],
         src_to_dists: torch.Tensor,
         sparse_condition: torch.Tensor,
+        num_heads: int, 
+        head_size: int, 
+        block_size: int,
     ) -> None:
         # ??
         key_caches = [kv_cache[0] for kv_cache in kv_caches]
         value_caches = [kv_cache[1] for kv_cache in kv_caches]
+        num_seq = 4 # ??
         print("PPPPPSPRASE")
         print(src_to_dists)
         print(src_to_dists[:, 0])
         print(src_to_dists[:, 1])
+        print(src_to_dists.size(0))
         
         print(len(key_caches))
         print(len(value_caches))
@@ -286,19 +291,19 @@ class PagedAttention:
         # print("PPPPPSPRASE")
         torch.set_printoptions(threshold=float('inf'))
         #print(key_caches[0][-5:, :100])
-        print("WWWWTTTFFFFF")
+        #print("WWWWTTTFFFFF")
         #print(value_caches[0][-5:, :100])
         print("PPPPSPRASE end")
         print(sparse_condition)
-        selection_index_src_tensor = torch.full((12, 4, 16), -1, dtype=torch.int64)
-        selection_index_dst_tensor = torch.full((12, 4, 16), -1, dtype=torch.int64)
+        selection_index_src_tensor = torch.full((12, src_to_dists.size(0), block_size), -1, dtype=torch.int64) # src_to_dists.size(0) = 5 ??
+        selection_index_dst_tensor = torch.full((12, src_to_dists.size(0), block_size), -1, dtype=torch.int64) # src_to_dists.size(0) = 5
         for i, row in enumerate(sparse_condition): # 0-3
             for j, value in enumerate(row):
                 count = 0
                 for k, num in enumerate(value):
                     if num == 1:
-                        selection_index_src_tensor[i, j, k] = k + i * 64 + j * 16
-                        selection_index_dst_tensor[i, j, k] = count + i * 64 + j * 16
+                        selection_index_src_tensor[i, j, k] = k + i * block_size * num_seq + j * block_size
+                        selection_index_dst_tensor[i, j, k] = count + i * block_size * num_seq + j * block_size
                         count += 1
         src_flatten = selection_index_src_tensor.flatten()
         dst_flatten = selection_index_dst_tensor.flatten()
@@ -308,7 +313,10 @@ class PagedAttention:
         block_mapping_dst = src_to_dists[:, 1].to(torch.int64)
         print(block_mapping_src)
         print(block_mapping_dst)
-        ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, src_flatten, dst_flatten)
+        print("debug")
+        print(block_mapping_src.shape)
+        print(block_mapping_dst.shape)
+        ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, src_flatten, dst_flatten, num_heads, head_size, block_size)
         #print(key_caches[0][-9:, :100])
-        print("WTFWTFWTFWTFWTF end")
+        #print("WTFWTFWTFWTFWTF end")
         #print(value_caches[0][-9:, :100])

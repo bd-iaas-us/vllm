@@ -51,6 +51,18 @@ class AttentionBackend(ABC):
     ) -> None:
         raise NotImplementedError
 
+    @staticmethod
+    @abstractmethod
+    def sparse_cache_copy(
+        kv_caches: List[torch.Tensor],
+        src_to_dists: torch.Tensor,
+        sparse_condition: torch.Tensor,
+        num_heads: int, 
+        head_size: int, 
+        block_size: int,
+    ) -> None:
+        raise NotImplementedError
+
 
 @dataclass
 class AttentionMetadataPerStage:

@@ -125,8 +125,8 @@ class SchedulerOutputs:
     blocks_to_swap_out: List[Tuple[int, int]]
     # Blocks to copy. Source to dest block.
     blocks_to_copy: List[Tuple[int, int]]
-    # Blocks to sparsecopy. Source to dest block.
-    blocks_to_sparse_copy: List[Tuple[int, int]]
+    # Blocks to sparse copy. Source blocks and dest blocks.
+    blocks_to_sparse_copy: List[List[List[int]]]
     # Sequence groups that are going to be ignored.
     ignored_seq_groups: List[SequenceGroup]
     # The number of slots for lookahead decoding.
@@ -182,7 +182,7 @@ class SchedulerRunningOutputs:
     # The blocks to copy.
     blocks_to_copy: List[Tuple[int, int]]
     # The blocks to sparse copy.
-    blocks_to_sparse_copy: List[Tuple[int, int]]
+    blocks_to_sparse_copy: List[List[List[int]]]
     # The number of slots for lookahead decoding.
     num_lookahead_slots: int
 
@@ -217,7 +217,7 @@ class SchedulerSwappedInOutputs:
     # The blocks to copy.
     blocks_to_copy: List[Tuple[int, int]]
     # The blocks to sparse copy.
-    blocks_to_sparse_copy: List[Tuple[int, int]]
+    blocks_to_sparse_copy: List[List[List[int]]]
     # The number of slots for lookahead decoding.
     num_lookahead_slots: int
     # Infeasible sequence groups.
@@ -409,7 +409,7 @@ class Scheduler:
         # Blocks that need to be swapped or copied before model execution.
         blocks_to_swap_out: List[Tuple[int, int]] = []
         blocks_to_copy: List[Tuple[int, int]] = []
-        blocks_to_sparse_copy: List[Tuple[int, int]] = []
+        blocks_to_sparse_copy: List[List[List[int]]] = []
 
         decode_seq_groups: List[ScheduledSequenceGroup] = []
         prefill_seq_groups: List[ScheduledSequenceGroup] = []
@@ -534,7 +534,7 @@ class Scheduler:
         # Blocks that need to be swapped or copied before model execution.
         blocks_to_swap_in: List[Tuple[int, int]] = []
         blocks_to_copy: List[Tuple[int, int]] = []
-        blocks_to_sparse_copy: List[Tuple[int, int]] = []
+        blocks_to_sparse_copy: List[List[List[int]]] = []
         decode_seq_groups: List[ScheduledSequenceGroup] = []
         prefill_seq_groups: List[ScheduledSequenceGroup] = []
 
@@ -1057,7 +1057,7 @@ class Scheduler:
         self,
         seq_group: SequenceGroup,
         blocks_to_copy: List[Tuple[int, int]],
-        blocks_to_sparse_copy: List[Tuple[int, int]],
+        blocks_to_sparse_copy: List[List[List[int]]],
     ) -> List[int]:
         """Appends new slots to the sequences in the given sequence group.
 
@@ -1070,39 +1070,31 @@ class Scheduler:
                 the new source and destination block indices for the appended
                 slots.
         """
-        print("I am called once")
+        print("I am called once") 
         num_lookahead_slots = self._get_num_lookahead_slots(is_prefill=False)
 
         free_blocks : List = []
-        for seq in seq_group.get_seqs(status=SequenceStatus.RUNNING):
+        for seq in seq_group.get_seqs(status=SequenceStatus.RUNNING): # ??
             # If use sparse-kv-cache flag and there is i%n==0 step.
             # Get the original KV blocks
             original_blocks = self.block_manager.get_block_table(seq)
             # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
             cows: List[Tuple[int, int]] = []
-            sparse_cows: List[Tuple[int, int]] = []
+            sparse_cows: List[List[int]] = []
             if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % 20 == 0:
+                # if not blocks_to_sparse_copy:
+                #     blocks_to_sparse_copy.extend([[],[]])
                 sparse_cows, free_block = self.block_manager.create_new_slots(seq)
                 free_blocks.extend(free_block)
+                # blocks_to_sparse_copy[0].extend(sparse_cows[0])
+                # blocks_to_sparse_copy[1].extend(sparse_cows[1])
+                blocks_to_sparse_copy.append(sparse_cows)
             cows = self.block_manager.append_slots(seq, num_lookahead_slots)
             blocks_to_copy.extend(cows)
-            blocks_to_sparse_copy.extend(sparse_cows)
-
             # copy the KV blocks from the original KV cache to the new KV cache with the attention score or other tokens priority.
             # Add a new ops method to copy all the KV cache from original to the new one.
-            # from vllm.attention.ops.paged_attn import (PagedAttention,
-            #                                PagedAttentionMetadata)
-            # PagedAttention.copy_to_paged_cache(original_blocks, cows,
-            #                                     attn_metadata.slot_mapping)
-            # ??
-            # PagedAttention.sparse_cache_copy(self.
-            #                                  block_manager.gpu_allocator.gpu
-            #                                  gpu_cache, src_to_dst)
-        # for item in free_blocks:
-        # #     # block.ref_count -= 1
-        # #     # if block.ref_count == 0:
-        #     print("CCCCCreate " + str(item.block_number))
-        #     self.block_manager.gpu_allocator.free(item)
+        print("BBBBBBBBBlock sparse copy")
+        print(blocks_to_sparse_copy)
         return free_blocks
 
     def _preempt(

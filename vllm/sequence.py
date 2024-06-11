@@ -820,7 +820,7 @@ class ExecuteModelRequest:
     # Blocks to copy. Source to dest block.
     blocks_to_copy: List[Tuple[int, int]] = field(default_factory=list)
     # Blocks to sparse copy. Source to dest block.
-    blocks_to_sparse_copy: List[Tuple[int, int]] = field(default_factory=list)
+    blocks_to_sparse_copy: List[List[List[int]]] = field(default_factory=list)
     # The number of slots for lookahead decoding.
     num_lookahead_slots: int = 0
     # The number of requests in the running queue.

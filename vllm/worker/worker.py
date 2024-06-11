@@ -92,7 +92,7 @@ class Worker(WorkerBase):
         
         # ?? Uninitialized cache engine. Will be initialized by
         # initialize_cache.
-        self.sparse_condition = torch.ones((12, 4, 16), dtype=torch.int64)
+        self.sparse_condition = torch.ones((12, 4, self.cache_config.block_size), dtype=torch.int64) # 12, 4, 16 ??
 
     def init_device(self) -> None:
         if self.device_config.device.type == "cuda":
@@ -219,8 +219,7 @@ class Worker(WorkerBase):
         print("LLLLLLLLength " + str(len(blocks_to_sparse_copy)))
         for item in blocks_to_sparse_copy:
             print("TEMP")
-            print(item[0])
-            print(item[1])
+            print(item)
         if self.cache_config.sparse_cache_type == 'h2o' and blocks_to_sparse_copy.numel() > 0:
             self.cache_engine.sparse_cache_copy(blocks_to_sparse_copy, sparse_condition)
 
@@ -268,9 +267,23 @@ class Worker(WorkerBase):
             blocks_to_copy = torch.tensor(execute_model_req.blocks_to_copy,
                                           device=self.device,
                                           dtype=torch.int64).view(-1, 2)
-            blocks_to_sparse_copy = torch.tensor(execute_model_req.blocks_to_sparse_copy, 
-                                                 device=self.device, 
-                                                 dtype=torch.int64).view(-1, 2)
+            print("WORKER")
+            print(execute_model_req.blocks_to_sparse_copy)
+            padded_data = []
+            if len(execute_model_req.blocks_to_sparse_copy) > 0:
+                fill_value = -1
+                max_len_inner = max(len(inner_list) for sublist in execute_model_req.blocks_to_sparse_copy for inner_list in sublist)
+                for sublist in execute_model_req.blocks_to_sparse_copy:
+                    padded_sublist = []
+                    for inner_list in sublist:
+                        padded_inner_list = inner_list + [fill_value] * (max_len_inner - len(inner_list))
+                        padded_sublist.append(padded_inner_list)
+                    padded_data.append(padded_sublist)
+            blocks_to_sparse_copy = torch.tensor(padded_data)
+            # blocks_to_sparse_copy = torch.tensor(execute_model_req.blocks_to_sparse_copy, 
+            #                                      device=self.device, 
+            #                                      dtype=torch.int64).view(-1, 2)
+            print(blocks_to_sparse_copy)
             data: Dict[str, Any] = {
                 "num_seq_groups": num_seq_groups,
                 "blocks_to_swap_in": blocks_to_swap_in,
@@ -295,7 +308,7 @@ class Worker(WorkerBase):
         
         # print("BEFOREEEE")
         # print(self.sparse_condition)
-        self.sparse_condition = torch.zeros((self.cache_engine.num_layers, 4, self.cache_engine.block_size), dtype=torch.int64)
+        self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
 
         output = self.model_runner.execute_model(seq_group_metadata_list,
                                                  self.gpu_cache, sparse_condition=self.sparse_condition)

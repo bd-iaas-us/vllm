@@ -270,10 +270,10 @@ class OPTDecoder(nn.Module):
         print(hidden_states.shape)
 
 
-        block_size = 16
+        block_size = 16  # ??
         seq_size = 4
         head_size = 12
-        percentage = 0.4 # ??
+        percentage = 0.3  # ??
 
         # sparse_condition_size = len(self.layers) * seq_size * block_size
         if sparse_condition is None:
@@ -336,7 +336,7 @@ class OPTModel(nn.Module):
     ) -> torch.Tensor:
         # print("OPT Model")
         # print(sparse_condition)
-        if sparse_condition is None:
+        if sparse_condition is None: # ??
             sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
         t = self.decoder(input_ids, positions, kv_caches, attn_metadata, sparse_condition)
         # print("OPT Model done")
@@ -368,7 +368,7 @@ class OPTForCausalLM(nn.Module):
         sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
         if sparse_condition is None:
-            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
+            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64) #??
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    attn_metadata, sparse_condition)
         return hidden_states

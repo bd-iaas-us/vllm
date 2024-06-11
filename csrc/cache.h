@@ -22,7 +22,10 @@ void sparse_cache_copy(
   const torch::Tensor& block_mapping_src_tensor,
   const torch::Tensor& block_mapping_dst_tensor,
   const torch::Tensor& selection_index_src_tensor,
-  const torch::Tensor& selection_index_dst_tensor);
+  const torch::Tensor& selection_index_dst_tensor,
+  const int num_heads,
+  const int head_size,
+  const int block_size);
 
 void copy_blocks(
   std::vector<torch::Tensor>& key_caches,

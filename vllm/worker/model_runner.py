@@ -787,7 +787,7 @@ class ModelRunner:
     ) -> Optional[SamplerOutput]:
         print("execute_model starts")
         if sparse_condition is None:
-            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
+            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64) # ??
         if kv_caches[0] is not None:
             print(kv_caches[0].shape)
             print("execute_model middle")
@@ -817,8 +817,10 @@ class ModelRunner:
             "positions": input_positions,
             "kv_caches": kv_caches,
             "attn_metadata": attn_metadata,
-            "sparse_condition": sparse_condition,
+            "sparse_condition": None,
         }
+        if self.cache_config.sparse_cache_type != 'auto':
+            execute_model_kwargs["sparse_condition"] = sparse_condition
         print("input_positions shape")
         print(input_positions.shape)
         print(input_positions)

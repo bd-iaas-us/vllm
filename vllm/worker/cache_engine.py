@@ -92,7 +92,10 @@ class CacheEngine:
             print(i)
             print(self.gpu_cache[i].shape)
         # print(self.gpu_cache[0][:2])
-        self.attn_backend.sparse_cache_copy(self.gpu_cache, src_to_dsts, sparse_condition)
+        # print(self.num_heads) # 12
+        # print(self.head_size) # 64
+        # print(self.block_size) # 16
+        self.attn_backend.sparse_cache_copy(self.gpu_cache, src_to_dsts, sparse_condition, self.num_heads, self.head_size, self.block_size)
 
     @staticmethod
     def get_cache_block_size(
