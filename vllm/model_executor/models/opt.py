@@ -271,29 +271,33 @@ class OPTDecoder(nn.Module):
 
 
         block_size = 16  # ??
+        #num_blocks = 3
+        num_blocks = 1
         seq_size = 4
         head_size = 12
-        percentage = 0.3  # ??
+        percentage = 0.5  # ??
 
         # sparse_condition_size = len(self.layers) * seq_size * block_size
         if sparse_condition is None:
-            sparse_condition = torch.zeros((len(self.layers), seq_size, block_size), dtype=torch.int64)
+            sparse_condition = torch.zeros((len(self.layers), seq_size, block_size * num_blocks), dtype=torch.int64)
         # else:
         #     sparse_condition_size = sparse_condition.size(0)
+        print("WWWWWWWWWWWW")
+        print(sparse_condition.shape)
         
         # temp_sparse_condition = torch.zeros(sparse_condition_size, dtype=torch.float16)
         for i in range(len(self.layers)):
             layer = self.layers[i]
             # print("OPT Layers" + str(i))
-            layer_sparse_condition = torch.zeros(seq_size * block_size * head_size, dtype=torch.float32)
+            layer_sparse_condition = torch.zeros(seq_size * block_size * num_blocks * head_size, dtype=torch.float32)
             # split layers to do
             hidden_states = layer(hidden_states, kv_caches[i], attn_metadata, layer_sparse_condition)
             # print(layer_sparse_condition)
-            layer_sparse_condition_2d = layer_sparse_condition.view(seq_size, block_size, head_size).mean(dim=2) # 4 * 16
+            layer_sparse_condition_2d = layer_sparse_condition.view(seq_size, block_size * num_blocks, head_size).mean(dim=2) # 4 * 16
             # temp_sparse_condition = (temp_sparse_condition * i + layer_sparse_condition) / (i + 1)
             # print(layer_sparse_condition_2d)
             for j in range(seq_size):
-                num_to_select = math.ceil(block_size * percentage)
+                num_to_select = math.ceil(block_size * num_blocks * percentage)
                 _, top_indices = torch.topk(layer_sparse_condition_2d[j], num_to_select)
                 is_all_zero = torch.all(layer_sparse_condition_2d[j] == 0)
                 # print("ALL zero")
@@ -302,7 +306,7 @@ class OPTDecoder(nn.Module):
                     top_indices = [i for i in range(num_to_select)]
                 # print(num_to_select)
                 # print(top_indices)
-                for k in range(block_size):
+                for k in range(block_size * num_blocks):
                     # if k == 0: # starting token ??
                     #     sparse_condition[i, j, k] = 1
                     if k in top_indices:
@@ -337,6 +341,7 @@ class OPTModel(nn.Module):
         # print("OPT Model")
         # print(sparse_condition)
         if sparse_condition is None: # ??
+            #sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64)
             sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
         t = self.decoder(input_ids, positions, kv_caches, attn_metadata, sparse_condition)
         # print("OPT Model done")
@@ -368,7 +373,8 @@ class OPTForCausalLM(nn.Module):
         sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
         if sparse_condition is None:
-            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64) #??
+            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
+            #sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64) #??
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    attn_metadata, sparse_condition)
         return hidden_states

@@ -249,7 +249,8 @@ __device__ void paged_attention_kernel(
         // Update the max value.
         qk_max = mask ? qk_max : fmaxf(qk_max, qk);
 
-        int score_idx = seq_idx * block_size * num_heads + token_idx * num_heads + head_idx;
+        int score_idx = seq_idx * block_size * num_heads + token_idx * num_heads + head_idx; // ??
+        // int score_idx = seq_idx * block_size * 3 * num_heads + token_idx * num_heads + head_idx; // ??
         if (!mask) {
           // printf("score_idx %d , seq_idx %d, token_idx %d, head_idx %d, token_idx - start_token_idx %d. ", score_idx, seq_idx, token_idx, head_idx, token_idx - start_token_idx);
           attention_scores[score_idx] = logits[token_idx - start_token_idx];
