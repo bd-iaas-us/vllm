@@ -207,8 +207,8 @@ class XFormersImpl(AttentionImpl):
         query = query.view(-1, self.num_heads, self.head_size)
         key = key.view(-1, self.num_kv_heads, self.head_size)
         value = value.view(-1, self.num_kv_heads, self.head_size)
-        # print("XXXXX")
-        # print(sparse_condition)
+        print("XXXXX")
+        print(sparse_condition.shape)
 
         if kv_cache is not None:
             key_cache, value_cache = PagedAttention.split_kv_cache(

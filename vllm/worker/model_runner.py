@@ -473,7 +473,13 @@ class ModelRunner:
 
                 seq_len = seq_data.get_len()
                 # if self.cache_config.sparse_cache_type == "h2o":
-                #     seq_len = seq_len - 3 # ??
+                #     if seq_len >= 40:
+                #         seq_len -= 20
+                #     elif seq_len >= 25:
+                #         seq_len -= 12
+                #     else:
+                #         seq_len -= 3
+                #     # seq_len = seq_len - 3 # ??
                 position = seq_len - 1
                 input_positions.append(position)
 
@@ -482,6 +488,10 @@ class ModelRunner:
                 seq_lens.append(seq_len)
 
                 block_table = seq_group_metadata.block_tables[seq_id]
+                print("PPPPPPPPrepare decode")
+                print(block_table)
+                print(position)
+                print(position // self.block_size)
                 block_number = block_table[position // self.block_size]
                 block_offset = position % self.block_size
                 slot = block_number * self.block_size + block_offset
@@ -522,8 +532,16 @@ class ModelRunner:
                 lora_index_mapping.append(0)
             batch_size = graph_batch_size
 
+        print("DDEBUG")
+        print(seq_lens)
+        print(self.device)
+        # assert torch.cuda.is_available(), "CUDA is not available"
+        # print(torch.cuda.memory_allocated())
+        # print(torch.cuda.memory_reserved())
+        # seq_lens = [41, 26, 6, 6]
+        print(seq_lens)
         seq_lens_tensor = torch.tensor(seq_lens,
-                                       dtype=torch.int,
+                                       dtype=torch.int32,
                                        device=self.device)
 
         if use_captured_graph:
@@ -787,7 +805,9 @@ class ModelRunner:
     ) -> Optional[SamplerOutput]:
         print("execute_model starts")
         if sparse_condition is None:
-            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64) # ??
+            print("GGGGGGGGGGG")
+            #sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64) # ??
+            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
         if kv_caches[0] is not None:
             print(kv_caches[0].shape)
             print("execute_model middle")

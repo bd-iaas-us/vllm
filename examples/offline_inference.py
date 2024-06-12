@@ -4,6 +4,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "6,7"
 os.environ['HF_HOME'] = '/data00/tony'
 os.environ['TRANSFORMERS_CACHE'] = '/data00/tony'
 os.environ['HF_DATASETS_CACHE'] = '/data00/tony'
+#os.environ['CUDA_LAUNCH_BLOCKING']= '1'
 # export HF_HOME=/data00/tony
 # export TRANSFORMERS_CACHE=/data00/tony
 # export HF_DATASETS_CACHE=/data00/tony
@@ -17,6 +18,8 @@ prompts = [
     #"Hello, my name is Tony, I like everything in",
     "Hello, my name is",
     "The president of the United States is",
+    #"Hello, my name is Tony, and I'm thrilled to have the opportunity to introduce myself to you. I am a motivated and enthusiastic individual with a passion for technology, marketing, finance. ",
+    #"The president of the United States is Donald Trump, who has been involved in a lawsuit, and he has been regarded ",
     "The capital of France is",
     "The future of AI is",
     # "Hello, my name is Tony, I like everything in",

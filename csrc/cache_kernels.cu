@@ -151,7 +151,7 @@ void copy_blocks(
 namespace vllm {
 
 // template<typename scalar_t, typename cache_t, Fp8KVCacheDataType kv_dt>
-// Grid: (num_layers, num_seqs, block_size)
+// Grid: (num_layers, num_seqs, block_size * 3)
 template<typename scalar_t>
 __global__ void sparse_cache_copy_kernel(
   int64_t* key_cache_ptrs,
@@ -166,22 +166,23 @@ __global__ void sparse_cache_copy_kernel(
   const int x) {
   const int layer_idx = blockIdx.x; // 0-11
   const int seq_idx = blockIdx.y; // 0-3
-  const int selected_pairs_idx = blockIdx.z; // 0-16
+  const int selected_pairs_idx = blockIdx.z; // 0-15 or 0-47
 
   const int num_layers = gridDim.x;
   const int num_seqs = gridDim.y;
-  const int block_size = gridDim.z;
+  const int block_size_times_num = gridDim.z; // 48
+  const int block_size = 16;
 
   // const int num_heads = 12;
   // const int head_size = 64;
   // const int x = 8;
-  const int num_selected_index = layer_idx * num_seqs * block_size + seq_idx * block_size + selected_pairs_idx;
+  const int num_selected_index = layer_idx * num_seqs * block_size_times_num + seq_idx * block_size_times_num + selected_pairs_idx;
   // const int64_t block_idx = slot_idx / block_size; // 22053
   // const int64_t block_offset = slot_idx % block_size; // 0, 1, 2...
 
   const int64_t src_token_idx  = selection_index_src[num_selected_index];
   const int64_t tgt_token_idx  = selection_index_dst[num_selected_index];
-  if (src_token_idx < 0 || src_token_idx > num_layers * num_seqs * block_size) {
+  if (src_token_idx < 0 || src_token_idx > num_layers * num_seqs * block_size_times_num) {
     return;
   }
 
@@ -191,14 +192,15 @@ __global__ void sparse_cache_copy_kernel(
 
   // 0 - 512
   for (int i = threadIdx.x; i < num_heads * head_size; i += blockDim.x) {
-    const int64_t src_token_layer_idx = src_token_idx % (num_seqs * block_size);
-    const int64_t tgt_token_layer_idx = tgt_token_idx % (num_seqs * block_size);
+    const int64_t src_token_layer_idx = src_token_idx % (num_seqs * block_size_times_num);
+    const int64_t tgt_token_layer_idx = tgt_token_idx % (num_seqs * block_size_times_num);
     
-    const int64_t block_idx = block_mapping_src[src_token_layer_idx / block_size];
-    const int64_t block_offset = src_token_layer_idx % block_size;
+    const int64_t block_idx = block_mapping_src[src_token_layer_idx / block_size_times_num];
+    // TORCH_CHECK(block_idx != -1);
+    const int64_t block_offset = src_token_layer_idx % block_size_times_num;
 
-    const int64_t tgt_block_idx = block_mapping_dst[tgt_token_layer_idx / block_size];
-    const int64_t tgt_block_offset = tgt_token_layer_idx % block_size;
+    const int64_t tgt_block_idx = block_mapping_dst[tgt_token_layer_idx / block_size_times_num];
+    const int64_t tgt_block_offset = tgt_token_layer_idx % block_size_times_num;
 
     const int head_idx = i / head_size;
     const int head_offset = i % head_size;
@@ -251,6 +253,7 @@ void sparse_cache_copy(
   const int head_size,
   const int block_size) {
   const int num_seqs = block_mapping_src_tensor.size(0);
+  const int total_num_blocks = block_mapping_src_tensor.size(1); // 3 or 1
 
   const int num_layers = key_caches.size();
   // int num_tokens = key.size(0);
@@ -271,7 +274,7 @@ void sparse_cache_copy(
   // int block_mapping_dst_number = static_cast<int64_t>(block_mapping_dst.size());
   printf("This is sparse copy %d, %d, %d\n",num_layers, value_caches.size(), selection_index_src_tensor.size(0));
   TORCH_CHECK(num_layers == value_caches.size());
-  TORCH_CHECK(selection_index_src_tensor.size(0) == num_layers * block_size * num_seqs);
+  TORCH_CHECK(selection_index_src_tensor.size(0) == num_layers * block_size * num_seqs * total_num_blocks);
   if (num_layers == 0) {
     return;
   }
@@ -304,7 +307,7 @@ void sparse_cache_copy(
 
 
   // Launch the kernel.
-  dim3 grid(num_layers, num_seqs, block_size); // num_selected_pairs/num_layers
+  dim3 grid(num_layers, num_seqs, block_size * total_num_blocks); // num_selected_pairs/num_layers
   printf("num_layers %d, num_selected_pairs %d, block_mapping_src size %d\n", num_layers, num_selected_pairs, num_seqs);
   dim3 block(std::min(num_heads * head_size, 64)); // ??
   const at::cuda::OptionalCUDAGuard device_guard(cache_device);

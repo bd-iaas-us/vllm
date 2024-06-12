@@ -1081,6 +1081,8 @@ class Scheduler:
             # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
             cows: List[Tuple[int, int]] = []
             sparse_cows: List[List[int]] = []
+            cows = self.block_manager.append_slots(seq, num_lookahead_slots)
+            blocks_to_copy.extend(cows)
             if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % 20 == 0:
                 # if not blocks_to_sparse_copy:
                 #     blocks_to_sparse_copy.extend([[],[]])
@@ -1089,8 +1091,6 @@ class Scheduler:
                 # blocks_to_sparse_copy[0].extend(sparse_cows[0])
                 # blocks_to_sparse_copy[1].extend(sparse_cows[1])
                 blocks_to_sparse_copy.append(sparse_cows)
-            cows = self.block_manager.append_slots(seq, num_lookahead_slots)
-            blocks_to_copy.extend(cows)
             # copy the KV blocks from the original KV cache to the new KV cache with the attention score or other tokens priority.
             # Add a new ops method to copy all the KV cache from original to the new one.
         print("BBBBBBBBBlock sparse copy")

@@ -95,8 +95,8 @@ class PagedAttention:
         #print(key_cache.shape)
         print(value_cache.shape)
         #print(key_cache[-9:, :100])
-        if t[0] == 6 or t[0] == 7 or t[0] == 4 or t[0] == 5 or t[0] == 3: # ??
-            print(value_cache[-5, -1, -1, :])
+        # if t[0] == 6 or t[0] == 7 or t[0] == 4 or t[0] == 5 or t[0] == 3: # ??
+        #     print(value_cache[-5, -1, -1, :])
 
     @staticmethod
     def copy_to_paged_cache(
@@ -148,10 +148,13 @@ class PagedAttention:
         use_v1 = (max_seq_len <= 8192
                   and (max_num_partitions == 1 or num_seqs * num_heads > 512))
         if use_v1:
-            # print("EEEEEEEEEEEEEEEEEEEEE")
+            print("EEEEEEEEEEEEEEEEEEEEE")
             if sparse_condition is None: # ??
                 # print("FFFFFFFFFFFFFFFFFFFFF")
                 sparse_condition = torch.zeros(768, dtype=torch.float32)
+                # sparse_condition = torch.zeros(768 * 3, dtype=torch.float32)
+            else:
+                print(sparse_condition.shape)
             # Run PagedAttention V1.
             ops.paged_attention_v1(
                 output,
@@ -274,7 +277,6 @@ class PagedAttention:
         head_size: int, 
         block_size: int,
     ) -> None:
-        # ??
         key_caches = [kv_cache[0] for kv_cache in kv_caches]
         value_caches = [kv_cache[1] for kv_cache in kv_caches]
         num_seq = 4 # ??
@@ -283,7 +285,6 @@ class PagedAttention:
         print(src_to_dists[:, 0])
         print(src_to_dists[:, 1])
         print(src_to_dists.size(0))
-        
         print(len(key_caches))
         print(len(value_caches))
         print(key_caches[0].shape)
@@ -293,18 +294,24 @@ class PagedAttention:
         #print(key_caches[0][-5:, :100])
         #print("WWWWTTTFFFFF")
         #print(value_caches[0][-5:, :100])
-        print("PPPPSPRASE end")
         print(sparse_condition)
-        selection_index_src_tensor = torch.full((12, src_to_dists.size(0), block_size), -1, dtype=torch.int64) # src_to_dists.size(0) = 5 ??
-        selection_index_dst_tensor = torch.full((12, src_to_dists.size(0), block_size), -1, dtype=torch.int64) # src_to_dists.size(0) = 5
+        print("PPPPSPRASE end")
+        num_blocks = src_to_dists.size(2)
+        print("NNNNNNNUMBLOCKS " + str(num_blocks))
+        selection_index_src_tensor = torch.full((12, src_to_dists.size(0), block_size * num_blocks), -1, dtype=torch.int64) # src_to_dists.size(0) = 5 ??
+        selection_index_dst_tensor = torch.full((12, src_to_dists.size(0), block_size * num_blocks), -1, dtype=torch.int64) # src_to_dists.size(0) = 5
+        print(selection_index_src_tensor.shape)
+        print(selection_index_dst_tensor.shape)
         for i, row in enumerate(sparse_condition): # 0-3
             for j, value in enumerate(row):
                 count = 0
                 for k, num in enumerate(value):
                     if num == 1:
-                        selection_index_src_tensor[i, j, k] = k + i * block_size * num_seq + j * block_size
-                        selection_index_dst_tensor[i, j, k] = count + i * block_size * num_seq + j * block_size
+                        selection_index_src_tensor[i, j, k] = k + i * num_seq * block_size * num_blocks + j * block_size * num_blocks
+                        selection_index_dst_tensor[i, j, k] = count + i * num_seq * block_size * num_blocks + j * block_size * num_blocks
                         count += 1
+        # print(selection_index_src_tensor)
+        # print(selection_index_dst_tensor)
         src_flatten = selection_index_src_tensor.flatten()
         dst_flatten = selection_index_dst_tensor.flatten()
         print("sssselection_index_src_tensor:", src_flatten)
