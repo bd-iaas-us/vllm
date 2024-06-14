@@ -127,6 +127,8 @@ class SequenceData:
         self._num_computed_tokens = 0
         self._stage: SequenceStage = SequenceStage.PREFILL
 
+        self.sparse_last_token_id = 0
+
     def append_token_id(self, token_id: int, logprob: float) -> None:
         self.output_token_ids.append(token_id)
         self.cumulative_logprob += logprob
@@ -612,6 +614,7 @@ class SequenceGroupMetadata:
         computed_block_nums: Optional[List[int]] = None,
         state: Optional[SequenceGroupState] = None,
         multi_modal_data: Optional[MultiModalData] = None,
+        n_times: Optional[int] = None,
     ) -> None:
         self.request_id = request_id
         self.is_prompt = is_prompt
@@ -637,6 +640,7 @@ class SequenceGroupMetadata:
                 self._token_chunk_size = list(seq_data.values())[0].get_len()
             else:
                 self._token_chunk_size = 1
+        self.n_times = n_times
 
     @property
     def lora_int_id(self) -> int:

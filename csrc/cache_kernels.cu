@@ -186,6 +186,9 @@ __global__ void sparse_cache_copy_kernel(
     return;
   }
 
+//if (layer_idx == 0 && (seq_idx == 0 ||seq_idx == 1)) {
+  //printf("src_token_idx: %d, tgt_token_idx: %d, ", src_token_idx, tgt_token_idx);
+//}
   scalar_t* key_cache = reinterpret_cast<scalar_t*>(key_cache_ptrs[layer_idx]);
   scalar_t* value_cache = reinterpret_cast<scalar_t*>(value_cache_ptrs[layer_idx]);
 
@@ -195,12 +198,24 @@ __global__ void sparse_cache_copy_kernel(
     const int64_t src_token_layer_idx = src_token_idx % (num_seqs * block_size_times_num);
     const int64_t tgt_token_layer_idx = tgt_token_idx % (num_seqs * block_size_times_num);
     
-    const int64_t block_idx = block_mapping_src[src_token_layer_idx / block_size_times_num];
+    // 192 / 16
+    const int64_t block_idx = block_mapping_src[src_token_layer_idx / block_size];
     // TORCH_CHECK(block_idx != -1);
-    const int64_t block_offset = src_token_layer_idx % block_size_times_num;
+    const int64_t block_offset = src_token_layer_idx % block_size;
 
-    const int64_t tgt_block_idx = block_mapping_dst[tgt_token_layer_idx / block_size_times_num];
-    const int64_t tgt_block_offset = tgt_token_layer_idx % block_size_times_num;
+    const int64_t tgt_block_idx = block_mapping_dst[tgt_token_layer_idx / block_size];
+    const int64_t tgt_block_offset = tgt_token_layer_idx % block_size;
+
+    
+
+    if (block_idx == -1 || tgt_block_idx == -1) {
+      continue;
+    }
+
+    //if (layer_idx == 0 && (seq_idx == 0 ||seq_idx == 1)) {
+    //printf("src_token_layer_idx: %lld, tgt_token_layer_idx: %lld, block_idx %lld, block_offset %lld, ", src_token_layer_idx, tgt_token_layer_idx, block_idx, block_offset);
+    //printf("tgt_block_idx: %lld, tgt_block_offset: %lld, ", tgt_block_idx, tgt_block_offset);
+    //}
 
     const int head_idx = i / head_size;
     const int head_offset = i % head_size;
@@ -272,7 +287,7 @@ void sparse_cache_copy(
   
   // int x = key_cache.size(4);
   // int block_mapping_dst_number = static_cast<int64_t>(block_mapping_dst.size());
-  printf("This is sparse copy %d, %d, %d\n",num_layers, value_caches.size(), selection_index_src_tensor.size(0));
+  printf("This is sparse copy %d, %d, %d %d\n", num_layers, value_caches.size(), selection_index_src_tensor.size(0), total_num_blocks);
   TORCH_CHECK(num_layers == value_caches.size());
   TORCH_CHECK(selection_index_src_tensor.size(0) == num_layers * block_size * num_seqs * total_num_blocks);
   if (num_layers == 0) {
@@ -295,20 +310,23 @@ void sparse_cache_copy(
   // int numel_per_block = key_caches[0][0].numel();
 
 
+  torch::Tensor flat_block_mapping_src_tensor = torch::flatten(block_mapping_src_tensor);
+  torch::Tensor flat_block_mapping_dst_tensor = torch::flatten(block_mapping_dst_tensor);
+
   // Move the data structures to the GPU.
   torch::Tensor key_cache_ptrs_tensor = torch::from_blob(
     key_cache_ptrs, {num_layers}, torch::kInt64).to(cache_device);
   torch::Tensor value_cache_ptrs_tensor = torch::from_blob(
     value_cache_ptrs, {num_layers}, torch::kInt64).to(cache_device);
-  torch::Tensor block_mapping_src_tensor_cuda = block_mapping_src_tensor.clone().to(cache_device);
-  torch::Tensor block_mapping_dst_tensor_cuda = block_mapping_dst_tensor.clone().to(cache_device);
+  torch::Tensor block_mapping_src_tensor_cuda = flat_block_mapping_src_tensor.clone().to(cache_device);
+  torch::Tensor block_mapping_dst_tensor_cuda = flat_block_mapping_dst_tensor.clone().to(cache_device);
   torch::Tensor selection_index_src_tensor_cuda = selection_index_src_tensor.clone().to(cache_device);
   torch::Tensor selection_index_dst_tensor_cuda = selection_index_dst_tensor.clone().to(cache_device);
 
 
   // Launch the kernel.
   dim3 grid(num_layers, num_seqs, block_size * total_num_blocks); // num_selected_pairs/num_layers
-  printf("num_layers %d, num_selected_pairs %d, block_mapping_src size %d\n", num_layers, num_selected_pairs, num_seqs);
+  printf("num_layers %d, num_selected_pairs %d, num_seqs %d, total_num_blocks %d, flat_block_mapping_src_tensor size %d, flat_block_mapping_dst_tensor %d\n", num_layers, num_selected_pairs, num_seqs, total_num_blocks, flat_block_mapping_src_tensor.size(0), flat_block_mapping_dst_tensor.size(0));
   dim3 block(std::min(num_heads * head_size, 64)); // ??
   const at::cuda::OptionalCUDAGuard device_guard(cache_device);
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();

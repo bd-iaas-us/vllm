@@ -108,7 +108,7 @@ class OPTAttention(nn.Module):
             print("kv_cache shape")
             print(kv_cache.shape)
         print(sparse_condition.shape)
-        attn_output = self.attn(q, k, v, kv_cache, attn_metadata, 1.0, sparse_condition) #?? kv_scale, sparse_condition??
+        attn_output = self.attn(q, k, v, kv_cache, attn_metadata, 1.0, sparse_condition) #?? kv_scale, sparse_condition
         output, _ = self.out_proj(attn_output)
         return output
 
@@ -251,9 +251,12 @@ class OPTDecoder(nn.Module):
         sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
         print("OPTDecoder forward start")
+        print(attn_metadata.slot_mapping.shape)
+        print(input_ids.size(0))
         print(input_ids)
         print(positions)
         print(positions.shape)
+        # key_cache.size(3)
         # tensor([0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5], device='cuda:0') 
         # tensor([6, 8, 6, 6], device='cuda:0')
         # if positions.size(0) == 26:
@@ -267,16 +270,26 @@ class OPTDecoder(nn.Module):
             inputs_embeds, _ = self.project_in(inputs_embeds)
         hidden_states = inputs_embeds + pos_embeds
         print("OPTDecoder forward in the middle")
+        if kv_caches[0] is not None:
+            print(kv_caches[0].shape)
+        print(self.config)
+        print(self.config.num_hidden_layers)
+        print(self.config.num_attention_heads)
         # print(hidden_states[0])
         print(hidden_states.shape)
 
 
-        block_size = 16  # ??
-        #num_blocks = 3
-        num_blocks = 1
-        seq_size = 4
-        head_size = 12
-        percentage = 0.5  # ??
+        block_size = 16  
+        num_blocks = 3 # ???
+        #num_blocks = 1
+        seq_size = 4  # input_ids.size(0)
+        # ??? 
+        # 1. copy not correct issue with half copy
+        # 2. sparse condition continue for multiple rounds
+        # 3. block 16, num_blocks 3, seq_size 4
+
+        head_size = self.config.num_attention_heads # 12 ?
+        percentage = 0.5 # 0.5 # ??
 
         # sparse_condition_size = len(self.layers) * seq_size * block_size
         if sparse_condition is None:
@@ -309,7 +322,7 @@ class OPTDecoder(nn.Module):
                 # print(num_to_select)
                 # print(top_indices)
                 for k in range(block_size * num_blocks):
-                    # if k == 0: # starting token ??
+                    # if k == 0: # starting token
                     #     sparse_condition[i, j, k] = 1
                     if k in top_indices:
                         sparse_condition[i, j, k] = 1
@@ -342,9 +355,10 @@ class OPTModel(nn.Module):
     ) -> torch.Tensor:
         # print("OPT Model")
         # print(sparse_condition)
-        if sparse_condition is None: # ??
-            #sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64)
-            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
+        # if sparse_condition is None: # ??
+        #     print("YYYYYYYYYYYYYY")
+        #     sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64)
+        #     #sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
         t = self.decoder(input_ids, positions, kv_caches, attn_metadata, sparse_condition)
         # print("OPT Model done")
         # print(sparse_condition)
@@ -374,9 +388,10 @@ class OPTForCausalLM(nn.Module):
         attn_metadata: AttentionMetadata,
         sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
-        if sparse_condition is None:
-            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
-            #sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64) #??
+        # if sparse_condition is None:
+        #     print("XXXXXXXXXXXXXXXXXXX")
+        #     #sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
+        #     sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64) #??
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    attn_metadata, sparse_condition)
         return hidden_states

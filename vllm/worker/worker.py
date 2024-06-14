@@ -90,9 +90,9 @@ class Worker(WorkerBase):
         # Initialize gpu_cache as embedding models don't initialize kv_caches
         self.gpu_cache: Optional[List[torch.tensor]] = None
         
-        # ?? Uninitialized cache engine. Will be initialized by
+        # Uninitialized cache engine. Will be initialized by
         # initialize_cache.
-        self.sparse_condition = torch.ones((12, 4, self.cache_config.block_size), dtype=torch.int64) # 12, 4, 16 * 3 ??
+        self.sparse_condition = None # torch.ones((12, 4, self.cache_config.block_size * 3), dtype=torch.int64) # 12, 4, 16 * 3 ???
 
     def init_device(self) -> None:
         if self.device_config.device.type == "cuda":
@@ -238,13 +238,12 @@ class Worker(WorkerBase):
         blocks_to_swap_out: torch.Tensor
         blocks_to_copy: torch.Tensor
         blocks_to_sparse_copy: torch.Tensor
-        num_requests = 4
         # length = self.cache_engine.num_layers * self.cache_engine.block_size
-        # sparse_condition = torch.ones(self.cache_engine.num_layers * self.cache_engine.block_size * 4) # 10001??
+        # sparse_condition = torch.ones(self.cache_engine.num_layers * self.cache_engine.block_size * 4)
         # sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
         # for i in range(self.cache_engine.num_layers):
         #     for j in range(num_requests):
-        #         for k in range(0, 16, 1): # 5 out of 16 ??
+        #         for k in range(0, 16, 1): # 5 out of 16
         #             sparse_condition[i, j, k] = 1
         # print(sparse_condition)
         if self.is_driver_worker:
@@ -308,8 +307,9 @@ class Worker(WorkerBase):
         
         print("BEFOREEEE")
         print(self.sparse_condition)
-        self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
-        #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size * 3), dtype=torch.int64) # ??
+        num_requests = 4
+        #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
+        self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size * 3), dtype=torch.int64) # ???
 
         output = self.model_runner.execute_model(seq_group_metadata_list,
                                                  self.gpu_cache, sparse_condition=self.sparse_condition)

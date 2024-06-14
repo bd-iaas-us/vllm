@@ -1,4 +1,5 @@
 import time
+import math
 from enum import IntEnum
 from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
 
@@ -472,14 +473,8 @@ class ModelRunner:
                 input_tokens.append(generation_token)
 
                 seq_len = seq_data.get_len()
-                # if self.cache_config.sparse_cache_type == "h2o":
-                #     if seq_len >= 40:
-                #         seq_len -= 20
-                #     elif seq_len >= 25:
-                #         seq_len -= 12
-                #     else:
-                #         seq_len -= 3
-                #     # seq_len = seq_len - 3 # ??
+                print("SEQ")
+                print(seq_len)
                 position = seq_len - 1
                 input_positions.append(position)
 
@@ -489,13 +484,33 @@ class ModelRunner:
 
                 block_table = seq_group_metadata.block_tables[seq_id]
                 print("PPPPPPPPrepare decode")
+                print(type(block_table))
                 print(block_table)
                 print(position)
                 print(position // self.block_size)
-                block_number = block_table[position // self.block_size]
-                block_offset = position % self.block_size
+                n_times = seq_group_metadata.n_times
+                kv_cache_pos = position
+                print(n_times)
+                print("N times")
+                
+                if self.cache_config.sparse_cache_type == "h2o":
+                    percentage = 0.5 # 0.5 # ??
+                    step = 20 # ??
+                    times = n_times // step
+                    temp = position - n_times
+                    temp = math.floor(temp * percentage)
+                    for i in range(times):
+                        temp += step
+                        temp = math.floor(temp * percentage)
+                    kv_cache_pos = temp + n_times % step
+                
+                print("Position: " + str(position) + ", KV cache position: " + str(kv_cache_pos) + " block size: " + str(self.block_size))
+                block_number = block_table[kv_cache_pos // self.block_size]
+                block_offset = kv_cache_pos % self.block_size
+                seq_data.sparse_last_token_id = block_offset
                 slot = block_number * self.block_size + block_offset
                 slot_mapping.append(slot)
+                print("block_number: " + str(block_number) + " block_offset : " + str(block_offset))
                 lora_index_mapping.append(lora_id)
                 lora_prompt_mapping.append(lora_id)
 
@@ -535,6 +550,7 @@ class ModelRunner:
         print("DDEBUG")
         print(seq_lens)
         print(self.device)
+        print(type(self.device))
         # assert torch.cuda.is_available(), "CUDA is not available"
         # print(torch.cuda.memory_allocated())
         # print(torch.cuda.memory_reserved())
@@ -804,10 +820,12 @@ class ModelRunner:
         sparse_condition: Optional[torch.Tensor],
     ) -> Optional[SamplerOutput]:
         print("execute_model starts")
+        print("seq_group_metadata_list " + str(len(seq_group_metadata_list)))
+        print("kv_caches " + str(len(kv_caches)))
         if sparse_condition is None:
-            print("GGGGGGGGGGG")
-            #sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64) # ??
-            sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
+            print("WWWWWWWWWWWWWWWWWWWWWW")
+            sparse_condition = torch.zeros((len(kv_caches), 4, self.block_size * 3), dtype=torch.int64) # ???
+            #sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
         if kv_caches[0] is not None:
             print(kv_caches[0].shape)
             print("execute_model middle")

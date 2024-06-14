@@ -946,7 +946,7 @@ class Scheduler:
         # if use sparse-kv-cache flag and there is i%n==0 step.
         # We could consider reserve some KV blocks for contain these blocks.
         # Is it possible to have unncessary more slots?
-        if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % 10 == 0:
+        if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % 20 == 0:
             return self.block_manager.can_append_slots_sparse_cache(
                 seq_group=seq_group,
                 num_lookahead_slots=self._get_num_lookahead_slots(is_prefill),
@@ -1023,6 +1023,7 @@ class Scheduler:
                 # `multi_modal_data` will be None.
                 multi_modal_data=seq_group.multi_modal_data
                 if scheduler_outputs.num_prefill_groups > 0 else None,
+                n_times=seq_group.n_times,
             )
             seq_group_metadata_list.append(seq_group_metadata)
             seq_group.n_times += 1
@@ -1083,7 +1084,8 @@ class Scheduler:
             sparse_cows: List[List[int]] = []
             cows = self.block_manager.append_slots(seq, num_lookahead_slots)
             blocks_to_copy.extend(cows)
-            if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % 20 == 0:
+            step = 20 # ??
+            if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % step == 0:
                 # if not blocks_to_sparse_copy:
                 #     blocks_to_sparse_copy.extend([[],[]])
                 sparse_cows, free_block = self.block_manager.create_new_slots(seq)
