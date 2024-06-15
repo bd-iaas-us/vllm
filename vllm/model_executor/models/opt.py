@@ -256,6 +256,10 @@ class OPTDecoder(nn.Module):
         print(input_ids)
         print(positions)
         print(positions.shape)
+        print(attn_metadata.num_decode_tokens)
+        print(attn_metadata.num_prefills)
+        print(attn_metadata.slot_mapping)
+        print(attn_metadata.slot_mapping // 16)
         # key_cache.size(3)
         # tensor([0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5], device='cuda:0') 
         # tensor([6, 8, 6, 6], device='cuda:0')
@@ -270,6 +274,8 @@ class OPTDecoder(nn.Module):
             inputs_embeds, _ = self.project_in(inputs_embeds)
         hidden_states = inputs_embeds + pos_embeds
         print("OPTDecoder forward in the middle")
+        print(sparse_condition.shape)
+        print(sparse_condition.size(2))
         if kv_caches[0] is not None:
             print(kv_caches[0].shape)
         print(self.config)
@@ -279,21 +285,22 @@ class OPTDecoder(nn.Module):
         print(hidden_states.shape)
 
 
-        block_size = 16  
-        num_blocks = 3 # ???
-        #num_blocks = 1
-        seq_size = 4  # input_ids.size(0)
-        # ??? 
-        # 1. copy not correct issue with half copy
-        # 2. sparse condition continue for multiple rounds
-        # 3. block 16, num_blocks 3, seq_size 4
+        # block_size = 16
+        # num_blocks = sparse_condition.size(2) // block_size # 3 
+        block_dimensions = sparse_condition.size(2)
+        seq_size = 0  # 4
+        if attn_metadata:
+            seq_size = attn_metadata.num_decode_tokens + attn_metadata.num_prefills
+        # ??
+        if seq_size == 256:
+            seq_size = 4
 
         head_size = self.config.num_attention_heads # 12 ?
         percentage = 0.5 # 0.5 # ??
 
         # sparse_condition_size = len(self.layers) * seq_size * block_size
         if sparse_condition is None:
-            sparse_condition = torch.zeros((len(self.layers), seq_size, block_size * num_blocks), dtype=torch.int64)
+            sparse_condition = torch.zeros((len(self.layers), seq_size, block_dimensions), dtype=torch.int64)
         # else:
         #     sparse_condition_size = sparse_condition.size(0)
         print("WWWWWWWWWWWW")
@@ -304,15 +311,15 @@ class OPTDecoder(nn.Module):
             layer = self.layers[i]
             # print("OPT Layers" + str(i))
             # Here we change the sparse_condition from 1d to 3d.
-            layer_sparse_condition = torch.zeros(seq_size * block_size * num_blocks * head_size, dtype=torch.float32)
+            layer_sparse_condition = torch.zeros(seq_size * block_dimensions * head_size, dtype=torch.float32)
             # split layers to do
             hidden_states = layer(hidden_states, kv_caches[i], attn_metadata, layer_sparse_condition)
             # print(layer_sparse_condition)
-            layer_sparse_condition_2d = layer_sparse_condition.view(seq_size, block_size * num_blocks, head_size).mean(dim=2) # 4 * 16
+            layer_sparse_condition_2d = layer_sparse_condition.view(seq_size, block_dimensions, head_size).mean(dim=2) # 4 * 16
             # temp_sparse_condition = (temp_sparse_condition * i + layer_sparse_condition) / (i + 1)
             # print(layer_sparse_condition_2d)
             for j in range(seq_size):
-                num_to_select = math.ceil(block_size * num_blocks * percentage)
+                num_to_select = math.ceil(block_dimensions * percentage)
                 _, top_indices = torch.topk(layer_sparse_condition_2d[j], num_to_select)
                 is_all_zero = torch.all(layer_sparse_condition_2d[j] == 0)
                 # print("ALL zero")
@@ -321,7 +328,7 @@ class OPTDecoder(nn.Module):
                     top_indices = [i for i in range(num_to_select)]
                 # print(num_to_select)
                 # print(top_indices)
-                for k in range(block_size * num_blocks):
+                for k in range(block_dimensions):
                     # if k == 0: # starting token
                     #     sparse_condition[i, j, k] = 1
                     if k in top_indices:

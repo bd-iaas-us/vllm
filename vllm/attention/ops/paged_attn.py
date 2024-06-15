@@ -160,6 +160,9 @@ class PagedAttention:
             # else:
             #     print(sparse_condition.shape)
             # Run PagedAttention V1.
+            print(sparse_condition.shape)
+            print(sparse_condition.size(0))
+            print(block_tables.shape)
             ops.paged_attention_v1(
                 output,
                 query,

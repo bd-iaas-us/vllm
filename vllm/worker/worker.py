@@ -92,7 +92,7 @@ class Worker(WorkerBase):
         
         # Uninitialized cache engine. Will be initialized by
         # initialize_cache.
-        self.sparse_condition = None # torch.ones((12, 4, self.cache_config.block_size * 3), dtype=torch.int64) # 12, 4, 16 * 3 ???
+        self.sparse_condition = None # torch.ones((12, 4, self.cache_config.block_size * 3), dtype=torch.int64) # 12, 4, 16 * 3 ??
 
     def init_device(self) -> None:
         if self.device_config.device.type == "cuda":
@@ -306,10 +306,15 @@ class Worker(WorkerBase):
             return []
         
         print("BEFOREEEE")
+        num_requests = len(seq_group_metadata_list)
+        print(num_requests)
         print(self.sparse_condition)
-        num_requests = 4
+        if num_requests > 100: # ??
+            num_requests = 4
         #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
         self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size * 3), dtype=torch.int64) # ???
+        # 1. copy not correct issue with half copy
+        # 2. sparse condition continue for multiple rounds
 
         output = self.model_runner.execute_model(seq_group_metadata_list,
                                                  self.gpu_cache, sparse_condition=self.sparse_condition)

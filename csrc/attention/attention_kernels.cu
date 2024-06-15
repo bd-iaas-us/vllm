@@ -164,7 +164,8 @@ __device__ void paged_attention_kernel(
   const int thread_group_offset = thread_idx % THREAD_GROUP_SIZE;
 
   // size is request * block * head_size
-  const int block_size = 16;
+  // const int block_size = 16;
+  // const int maximal_blocks = 3;
 
   // Load the query to registers.
   // Each thread in a thread group has a different part of the query.
@@ -250,7 +251,10 @@ __device__ void paged_attention_kernel(
         qk_max = mask ? qk_max : fmaxf(qk_max, qk);
 
         // int score_idx = seq_idx * block_size * num_heads + token_idx * num_heads + head_idx;
-        int score_idx = seq_idx * block_size * 3 * num_heads + token_idx * num_heads + head_idx; // ???
+        // printf("max_num_blocks_per_seq %d, BLOCK_SIZE %d", max_num_blocks_per_seq, BLOCK_SIZE);
+        // printf("q_stride %d, kv_block_stride %d, kv_head_stride %d, BLOCK_SIZE * maximal_blocks * num_heads", q_stride, kv_block_stride, kv_head_stride, BLOCK_SIZE * maximal_blocks * num_heads);
+        // int score_idx = seq_idx * BLOCK_SIZE * maximal_blocks * num_heads + token_idx * num_heads + head_idx;
+        int score_idx = seq_idx * BLOCK_SIZE * 3 * num_heads + token_idx * num_heads + head_idx; // ???
         if (!mask) {
           // printf("score_idx %d , seq_idx %d, token_idx %d, head_idx %d, token_idx - start_token_idx %d. ", score_idx, seq_idx, token_idx, head_idx, token_idx - start_token_idx);
           attention_scores[score_idx] = logits[token_idx - start_token_idx];

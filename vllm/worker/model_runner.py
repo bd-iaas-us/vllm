@@ -526,6 +526,8 @@ class ModelRunner:
                 if last_page_len == 0:
                     last_page_len = self.block_size
                 paged_kv_last_page_len.append(last_page_len)
+        print("PPPPPPPPPPrepare decode 1")
+        print(block_tables)
 
         # vLLM uses cuda graph only for decoding requests.
         # See `capture_model` API for more details.
@@ -556,11 +558,14 @@ class ModelRunner:
         # print(torch.cuda.memory_reserved())
         # seq_lens = [41, 26, 6, 6]
         print(seq_lens)
+        print("PPPPPPPPPPrepare decode 2")
+        print(block_tables)
         seq_lens_tensor = torch.tensor(seq_lens,
                                        dtype=torch.int32,
                                        device=self.device)
 
         if use_captured_graph:
+            print("Interesting")
             # When using cuda-graph all these tensors should be
             # padded.
             assert seq_lens_tensor.shape[0] == len(input_tokens)
@@ -570,13 +575,18 @@ class ModelRunner:
             # The shape of graph_block_tables is
             # [max batch size, max context len // block size].
             input_block_tables = self.graph_block_tables[:batch_size]
+            print(batch_size)
+            print(input_block_tables)
             for i, block_table in enumerate(block_tables):
                 if block_table:
                     input_block_tables[i, :len(block_table)] = block_table
+            print(input_block_tables)
             block_tables = torch.tensor(input_block_tables, device=self.device)
         else:
             max_block_table_len = max(
                 len(block_table) for block_table in block_tables)
+            print("PPPPPPPPPPPPPPPPPPPPPPPrepare max_block_table_len")
+            print(max_block_table_len)
             block_tables = make_tensor_with_pad(
                 block_tables,
                 max_len=max_block_table_len,
@@ -584,7 +594,8 @@ class ModelRunner:
                 dtype=torch.int,
                 device=self.device,
             )
-
+        print("PPPPPPPPPPrepare decode 3")
+        print(block_tables)
         if self.attn_backend.get_name() == "flashinfer":
             if not hasattr(self, "flashinfer_workspace_buffer"):
                 # Allocate 16MB workspace buffer
@@ -603,7 +614,6 @@ class ModelRunner:
             kv_cache_dtype = get_kv_cache_torch_dtype(self.kv_cache_dtype,
                                                       self.model_config.dtype)
 
-            # Temporarily nothing now.
 
             attn_metadata = self.attn_backend.make_metadata(
                 is_prompt=False,
@@ -621,6 +631,8 @@ class ModelRunner:
                 data_type=kv_cache_dtype,
                 sparse_cache_type=sparse_cache_type)
         else:
+            print("QQQQQQ")
+            print(block_tables)
             attn_metadata = self.attn_backend.make_metadata(
                 is_prompt=False,
                 seq_lens=None,
@@ -679,6 +691,9 @@ class ModelRunner:
                 decode_lora_requests,
                 decode_slot_mapping,
             ) = self._prepare_decode(decode_reqs)
+            print("OOOOOOOOOOOOOOuch")
+            print(prefill_attn_metadata)
+            print(decode_attn_metadata)
             sampling_metadata = SamplingMetadata.prepare(
                 seq_group_metadata_list, seq_lens, query_lens, self.device,
                 self.pin_memory)
@@ -797,6 +812,8 @@ class ModelRunner:
                 decode_attn_metadata = self.attn_backend.make_metadata(
                     **metadata_dict)
 
+        print("LLLLLLLLLLLet us see")
+        print(decode_attn_metadata)
         attn_metadata = AttentionMetadata(
             num_prefills=num_prefills,
             slot_mapping=slot_mapping,
@@ -822,10 +839,6 @@ class ModelRunner:
         print("execute_model starts")
         print("seq_group_metadata_list " + str(len(seq_group_metadata_list)))
         print("kv_caches " + str(len(kv_caches)))
-        if sparse_condition is None:
-            print("WWWWWWWWWWWWWWWWWWWWWW")
-            sparse_condition = torch.zeros((len(kv_caches), 4, self.block_size * 3), dtype=torch.int64) # ???
-            #sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
         if kv_caches[0] is not None:
             print(kv_caches[0].shape)
             print("execute_model middle")
@@ -837,6 +850,17 @@ class ModelRunner:
             print(kv_caches[0].shape)
             print("execute_model middle")
             #print(kv_caches[0][1][-5:, :100])
+
+        if sparse_condition is None:
+            print("WWWWWWWWWWWWWWWWWWWWWW")
+            num_blocks = 0
+            if attn_metadata and attn_metadata.decode_metadata and attn_metadata.decode_metadata.block_tables:
+                num_blocks = attn_metadata.decode_metadata.block_tables
+            print(num_blocks)
+            sparse_condition = torch.zeros((len(kv_caches), 4, self.block_size * num_blocks), dtype=torch.int64) # 3 ??
+            # print("VVVVVVVVV")
+            # print(sparse_condition)
+            #sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
 
         if self.lora_config:
             self.set_active_loras(lora_requests, lora_mapping)

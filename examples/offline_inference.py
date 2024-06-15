@@ -40,6 +40,7 @@ sampling_params = SamplingParams(temperature=0.8, top_p=0.95)
 #llm = LLM(model="facebook/opt-125m", tensor_parallel_size = 1, kv_cache_dtype='auto')
 #llm = LLM(model="facebook/opt-125m", tensor_parallel_size = 1, max_model_len=100, kv_cache_dtype='auto')
 llm = LLM(model="facebook/opt-125m", tensor_parallel_size = 1, max_model_len=100, kv_cache_dtype='auto', sparse_kv_cache_type='h2o')
+#llm = LLM(model="meta-llama/Llama-2-7b-chat-hf", tensor_parallel_size = 1, max_model_len=100, kv_cache_dtype='auto', sparse_kv_cache_type='h2o')
 #llm = LLM(model="meta-llama/Llama-2-7b-chat-hf", tensor_parallel_size = 1, gpu_memory_utilization=0.95, max_model_len=100, kv_cache_dtype='auto', sparse_kv_cache_type='h2o')
 # Generate texts from the prompts. The output is a list of RequestOutput objects
 # that contain the prompt, generated text, and other information.
