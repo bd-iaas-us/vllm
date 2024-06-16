@@ -109,6 +109,8 @@ class OPTAttention(nn.Module):
             print(kv_cache.shape)
         print(sparse_condition.shape)
         attn_output = self.attn(q, k, v, kv_cache, attn_metadata, 1.0, sparse_condition) #?? kv_scale, sparse_condition
+        print("WTF here")
+        # print(sparse_condition)
         output, _ = self.out_proj(attn_output)
         return output
 
@@ -241,6 +243,7 @@ class OPTDecoder(nn.Module):
             OPTDecoderLayer(config, quant_config)
             for _ in range(config.num_hidden_layers)
         ])
+        self.n_times = -2
 
     def forward(
         self,
@@ -260,6 +263,7 @@ class OPTDecoder(nn.Module):
         print(attn_metadata.num_prefills)
         print(attn_metadata.slot_mapping)
         print(attn_metadata.slot_mapping // 16)
+        print(attn_metadata.slot_mapping % 16)
         # key_cache.size(3)
         # tensor([0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5], device='cuda:0') 
         # tensor([6, 8, 6, 6], device='cuda:0')
@@ -274,8 +278,9 @@ class OPTDecoder(nn.Module):
             inputs_embeds, _ = self.project_in(inputs_embeds)
         hidden_states = inputs_embeds + pos_embeds
         print("OPTDecoder forward in the middle")
-        print(sparse_condition.shape)
-        print(sparse_condition.size(2))
+        if sparse_condition is not None:
+            print(sparse_condition.shape)
+            print(sparse_condition.size(2))
         if kv_caches[0] is not None:
             print(kv_caches[0].shape)
         print(self.config)
@@ -287,7 +292,9 @@ class OPTDecoder(nn.Module):
 
         # block_size = 16
         # num_blocks = sparse_condition.size(2) // block_size # 3 
-        block_dimensions = sparse_condition.size(2)
+        block_dimensions = 0
+        if sparse_condition is not None:
+            block_dimensions = sparse_condition.size(2)
         seq_size = 0  # 4
         if attn_metadata:
             seq_size = attn_metadata.num_decode_tokens + attn_metadata.num_prefills
@@ -299,15 +306,32 @@ class OPTDecoder(nn.Module):
         percentage = 0.5 # 0.5 # ??
 
         # sparse_condition_size = len(self.layers) * seq_size * block_size
-        if sparse_condition is None:
-            sparse_condition = torch.zeros((len(self.layers), seq_size, block_dimensions), dtype=torch.int64)
+        # if sparse_condition is None: # ??
+        #     sparse_condition = torch.zeros((len(self.layers), seq_size, block_dimensions), dtype=torch.int64)
         # else:
         #     sparse_condition_size = sparse_condition.size(0)
         print("WWWWWWWWWWWW")
-        print(sparse_condition.shape)
+        if sparse_condition is not None:
+            sparse_condition.zero_()
+            print(sparse_condition.shape)
+            # print(sparse_condition)
+
+        def find_increasing_subsequences_lengths(tensor: torch.Tensor):
+            lengths = []
+            start_index = 0
+            for i in range(1, len(tensor)):
+                if tensor[i] == 0:
+                    lengths.append(i - start_index)
+                    start_index = i
+            lengths.append(len(tensor) - start_index)
+            return lengths
         
         # temp_sparse_condition = torch.zeros(sparse_condition_size, dtype=torch.float16)
+        # print(sparse_condition)
+        #print("QUTAMADE")
         for i in range(len(self.layers)):
+            #print("QUTAMA")
+            # print(sparse_condition)
             layer = self.layers[i]
             # print("OPT Layers" + str(i))
             # Here we change the sparse_condition from 1d to 3d.
@@ -318,27 +342,68 @@ class OPTDecoder(nn.Module):
             layer_sparse_condition_2d = layer_sparse_condition.view(seq_size, block_dimensions, head_size).mean(dim=2) # 4 * 16
             # temp_sparse_condition = (temp_sparse_condition * i + layer_sparse_condition) / (i + 1)
             # print(layer_sparse_condition_2d)
+            #print("QUTA")
+            print(i)
+            print(positions)
+            # print(sparse_condition)
             for j in range(seq_size):
-                num_to_select = math.ceil(block_dimensions * percentage)
-                _, top_indices = torch.topk(layer_sparse_condition_2d[j], num_to_select)
+                num_to_select = math.ceil(block_dimensions * percentage) # ????
+                # 1. sparse condition continue for multiple rounds
+                n_times = self.n_times
+                print("NTNTNT" + str(n_times))
+                # print(sparse_condition)
+                if n_times >= 0:
+                    percentage = 0.5 # 0.5 # ??
+                    step = 20 # ??
+                    times = n_times // step
+                    temp = positions[j] + 1 - n_times # after inserting one token
+                    temp = math.floor(temp * percentage)
+                    for _ in range(times):
+                        temp += step
+                        temp = math.floor(temp * percentage)
+                    num_to_select = temp + n_times % step
+                # print("NUMBERNUMBER" + str(num_to_select))
+                # print(sparse_condition)
+                # print("RRRRNUMBERNUMBER")
+                _, top_indices = torch.topk(torch.abs(layer_sparse_condition_2d[j]), num_to_select) #?? absolute value
+                # print(sparse_condition)
+                # print(top_indices)
                 is_all_zero = torch.all(layer_sparse_condition_2d[j] == 0)
-                # print("ALL zero")
-                if is_all_zero:
-                    # print("zero")
+                print("ALL zero")
+                if is_all_zero: # prefill case ??
+                    temp_length = find_increasing_subsequences_lengths(positions)
+                    print("TTTTTTTT")
+                    print(temp_length)
+                    print("zzzzzero")
+                    print(j)
+                    print(len(temp_length))
+                    #num_to_select = math.floor(temp_length[j] * percentage)
+                    num_to_select = temp_length[j]
+                    print(num_to_select)
                     top_indices = [i for i in range(num_to_select)]
                 # print(num_to_select)
                 # print(top_indices)
+                print("IIIIIIIIIIIIIIIIIIIIIIIIIII:" + str(i))
+                print(top_indices)
+                print(block_dimensions)
+                # print(sparse_condition)
                 for k in range(block_dimensions):
                     # if k == 0: # starting token
                     #     sparse_condition[i, j, k] = 1
                     if k in top_indices:
+                        print("KKKK " + str(k))
                         sparse_condition[i, j, k] = 1
+                    else:
+                        sparse_condition[i, j, k] = 0
+                
+        #print("WTF man")
         # print(sparse_condition)
 
         if self.final_layer_norm is not None:
             hidden_states = self.final_layer_norm(hidden_states)
         if self.project_out is not None:
             hidden_states, _ = self.project_out(hidden_states)
+        self.n_times += 1
         return hidden_states
 
 

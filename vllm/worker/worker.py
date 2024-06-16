@@ -92,7 +92,7 @@ class Worker(WorkerBase):
         
         # Uninitialized cache engine. Will be initialized by
         # initialize_cache.
-        self.sparse_condition = None # torch.ones((12, 4, self.cache_config.block_size * 3), dtype=torch.int64) # 12, 4, 16 * 3 ??
+        self.sparse_condition = [None] # torch.ones((12, 4, self.cache_config.block_size * 3), dtype=torch.int64) # 12, 4, 16 * 3 ??
 
     def init_device(self) -> None:
         if self.device_config.device.type == "cuda":
@@ -299,7 +299,7 @@ class Worker(WorkerBase):
             blocks_to_copy = data["blocks_to_copy"]
             blocks_to_sparse_copy = data["blocks_to_sparse_copy"]
 
-        self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy, blocks_to_sparse_copy, self.sparse_condition)
+        self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy, blocks_to_sparse_copy, self.sparse_condition[0])
 
         # If there is no input, we don't need to execute the model.
         if num_seq_groups == 0:
@@ -312,9 +312,7 @@ class Worker(WorkerBase):
         if num_requests > 100: # ??
             num_requests = 4
         #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
-        self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size * 3), dtype=torch.int64) # ???
-        # 1. copy not correct issue with half copy
-        # 2. sparse condition continue for multiple rounds
+        #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size * 7), dtype=torch.int64) # ??
 
         output = self.model_runner.execute_model(seq_group_metadata_list,
                                                  self.gpu_cache, sparse_condition=self.sparse_condition)

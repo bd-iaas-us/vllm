@@ -163,6 +163,7 @@ class PagedAttention:
             print(sparse_condition.shape)
             print(sparse_condition.size(0))
             print(block_tables.shape)
+            print(seq_lens)
             ops.paged_attention_v1(
                 output,
                 query,
@@ -178,7 +179,7 @@ class PagedAttention:
                 kv_cache_dtype,
                 kv_scale,
                 sparse_cache_type,
-                sparse_condition,
+                sparse_condition, #??
             )
             # print("After updated tensor")
             # print(sparse_condition)
@@ -234,6 +235,7 @@ class PagedAttention:
         sliding_window: Optional[int],
     ) -> torch.Tensor:
         output = torch.empty_like(query)
+        # ??? no sparse kv cache
         context_attention_fwd(
             query,
             key,
@@ -286,6 +288,8 @@ class PagedAttention:
     ) -> None:
         key_caches = [kv_cache[0] for kv_cache in kv_caches]
         value_caches = [kv_cache[1] for kv_cache in kv_caches]
+        print(sparse_condition)
+        # assert sparse_condition is not None
         num_seq = sparse_condition.size(1) # 4 ?
         print("PPPPPSPRASE")
         print(src_to_dists)
@@ -299,9 +303,6 @@ class PagedAttention:
         print(value_caches[0].shape)
         # print("PPPPPSPRASE")
         torch.set_printoptions(threshold=float('inf'))
-        #print(key_caches[0][-5:, :100])
-        #print("WWWWTTTFFFFF")
-        print(value_caches[0][-15:, :100])
         print(sparse_condition)
         print(sparse_condition.shape)
         print(sparse_condition.size(1))
@@ -333,8 +334,13 @@ class PagedAttention:
         print("debug")
         print(block_mapping_src.shape)
         print(block_mapping_dst.shape)
+        #print(key_caches[0][-5:, :100])
+        print("PagedAttention sparse_cache_copy")
+        #print(value_caches[0][-15:, :100])
+        print(value_caches[0][22041:, :100])
         ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, src_flatten, dst_flatten, num_heads, head_size, block_size)
         #print(key_caches[0][-9:, :100])
         print("WTFWTFWTFWTFWTF end")
-        print(value_caches[0][-15:, :100])
+        #print(value_caches[0][-15:, :100])
+        print(value_caches[0][22041:, :100])
         #gc.collect() ??

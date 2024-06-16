@@ -404,7 +404,8 @@ class BlockSpaceManagerV1(BlockSpaceManager):
             ret[0].append(block.block_number)
             print("BBBBCreate " + str(block.block_number))
         # new_block_number = math.ceil(len(seq.logical_token_blocks) * 1.0) # 0.2
-        new_block_number = math.ceil(len(block_table) * 0.5) # 0.5 # ?? 0.2 16 * 0.3 = 4.8 ~ 5
+        percentage = 0.5
+        new_block_number = math.ceil(len(block_table) * percentage) # 0.5 # ?? 0.2 16 * 0.3 = 4.8 ~ 5
         if len(ret) == 1:
             ret.append([])
         # Will reuse cause trouble??

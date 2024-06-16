@@ -475,7 +475,7 @@ class ModelRunner:
                 seq_len = seq_data.get_len()
                 print("SEQ")
                 print(seq_len)
-                position = seq_len - 1
+                position = seq_len - 1 # ??
                 input_positions.append(position)
 
                 seq_len = seq_len if self.sliding_window is None else min(
@@ -493,18 +493,33 @@ class ModelRunner:
                 print(n_times)
                 print("N times")
                 
-                if self.cache_config.sparse_cache_type == "h2o":
+                # if self.cache_config.sparse_cache_type == "h2o":
+                #     percentage = 0.5 # 0.5 # ??
+                #     step = 20 # ??
+                #     times = n_times // step
+                #     temp = position - n_times
+                #     temp = math.floor(temp * percentage)
+                #     for i in range(times):
+                #         temp += step
+                #         temp = math.floor(temp * percentage)
+                #     kv_cache_pos = temp + n_times % step
+                if self.cache_config.sparse_cache_type == "h2o" and n_times >= 0:
                     percentage = 0.5 # 0.5 # ??
                     step = 20 # ??
                     times = n_times // step
                     temp = position - n_times
-                    temp = math.floor(temp * percentage)
+                    temp = math.floor(temp * percentage) 
                     for i in range(times):
                         temp += step
                         temp = math.floor(temp * percentage)
                     kv_cache_pos = temp + n_times % step
+                    # seq_lens.pop()
+                    # seq_lens.append(kv_cache_pos + 1) # Update seq_lens item
+
                 
                 print("Position: " + str(position) + ", KV cache position: " + str(kv_cache_pos) + " block size: " + str(self.block_size))
+                print(kv_cache_pos // self.block_size)
+                print(len(block_table))
                 block_number = block_table[kv_cache_pos // self.block_size]
                 block_offset = kv_cache_pos % self.block_size
                 seq_data.sparse_last_token_id = block_offset
@@ -834,7 +849,7 @@ class ModelRunner:
         self,
         seq_group_metadata_list: List[SequenceGroupMetadata],
         kv_caches: List[torch.Tensor],
-        sparse_condition: Optional[torch.Tensor],
+        sparse_condition: Optional[List[torch.Tensor]],
     ) -> Optional[SamplerOutput]:
         print("execute_model starts")
         print("seq_group_metadata_list " + str(len(seq_group_metadata_list)))
@@ -850,14 +865,20 @@ class ModelRunner:
             print(kv_caches[0].shape)
             print("execute_model middle")
             #print(kv_caches[0][1][-5:, :100])
-
-        if sparse_condition is None:
-            print("WWWWWWWWWWWWWWWWWWWWWW")
-            num_blocks = 0
-            if attn_metadata and attn_metadata.decode_metadata and attn_metadata.decode_metadata.block_tables:
-                num_blocks = attn_metadata.decode_metadata.block_tables
+        print("CCCCCCCC")
+        print(sparse_condition)
+        if sparse_condition is not None and sparse_condition[0] is None:
+            print("NUMBERNUMBERNUMBER")
+            num_blocks = 7 # ??? This needs the update from triton side to determine
+            # if attn_metadata and attn_metadata.prefill_metadata:
+            #     num_blocks = max(len(block_table) for block_table in attn_metadata.prefill_metadata.block_tables)
+            #     print(num_blocks)
+            # if attn_metadata and attn_metadata.decode_metadata:
+            #     num_blocks = max(len(block_table) for block_table in attn_metadata.prefill_metadata.block_tables)
+            #     print(num_blocks)
+                
             print(num_blocks)
-            sparse_condition = torch.zeros((len(kv_caches), 4, self.block_size * num_blocks), dtype=torch.int64) # 3 ??
+            sparse_condition[0] = torch.zeros((len(kv_caches), 4, self.block_size * num_blocks), dtype=torch.int64) # 3 ??
             # print("VVVVVVVVV")
             # print(sparse_condition)
             #sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
@@ -881,8 +902,8 @@ class ModelRunner:
             "attn_metadata": attn_metadata,
             "sparse_condition": None,
         }
-        if self.cache_config.sparse_cache_type != 'auto':
-            execute_model_kwargs["sparse_condition"] = sparse_condition
+        if self.cache_config.sparse_cache_type != 'auto' and sparse_condition is not None:
+            execute_model_kwargs["sparse_condition"] = sparse_condition[0]
         print("input_positions shape")
         print(input_positions.shape)
         print(input_positions)

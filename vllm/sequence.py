@@ -437,7 +437,7 @@ class SequenceGroup:
         self.multi_modal_data = multi_modal_data
         self.embeddings = embeddings
         self.pooling_params = pooling_params
-        self.n_times = -1
+        self.n_times = -2 #?? after generating first token and second token, we start to do sparse KV cache
 
     @property
     def prompt(self) -> str:
