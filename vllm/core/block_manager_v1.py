@@ -118,7 +118,6 @@ class CachedBlockAllocator(BlockAllocatorBase):
         block = self.cached_blocks[block_hash]
         assert block.block_hash == block_hash
         block.ref_count += 1
-        print("bbbbbbblock " + str(block.block_number))
         return block
 
     def free(self, block: PhysicalTokenBlock) -> None:
@@ -186,8 +185,6 @@ class UncachedBlockAllocator(BlockAllocatorBase):
             raise ValueError("Out of memory! No free blocks are available.")
         block = self.free_blocks.pop()
         block.ref_count = 1
-        #print(self.free_blocks)
-        print("bbbbbbblockyyy " + str(block.block_number))
         return block
 
     def free(self, block: PhysicalTokenBlock) -> None:
@@ -195,7 +192,6 @@ class UncachedBlockAllocator(BlockAllocatorBase):
             raise ValueError(f"Double free! {block} is already freed.")
         block.ref_count -= 1
         if block.ref_count == 0:
-            print("FREE " + str(block.block_number))
             self.free_blocks.append(block)
 
     def get_num_free_blocks(self) -> int:
@@ -303,12 +299,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
                 block = self.gpu_allocator.allocate()
                 # Set the reference counts of the token blocks.
                 block.ref_count = seq_group.num_seqs()
-            #pprint
-            print("TAAAAAAAAABLE")
-            print("Table length " + str(len(block_table)))
-            print("Table length before " + str(len(block_table)))
             block_table.append(block)
-            print("Table length after " + str(len(block_table)) + " ref count " + str(block.ref_count))
 
         # Assign the block table for each sequence.
         for seq in seq_group.get_seqs(status=SequenceStatus.WAITING):
@@ -402,13 +393,9 @@ class BlockSpaceManagerV1(BlockSpaceManager):
             if not ret:
                 ret.append([])
             ret[0].append(block.block_number)
-            print("BBBBCreate " + str(block.block_number))
-        # new_block_number = math.ceil(len(seq.logical_token_blocks) * 1.0) # 0.2
-        # percentage = 0.5
-        new_block_number = math.ceil(len(block_table) * percentage) # 0.5 # ?? 0.2 16 * 0.3 = 4.8 ~ 5
+        new_block_number = math.ceil(len(block_table) * percentage)
         if len(ret) == 1:
             ret.append([])
-        # Will reuse cause trouble??
         new_block_table: BlockTable = []
         for i in range(new_block_number):
             assert len(ret) == 2
@@ -421,25 +408,9 @@ class BlockSpaceManagerV1(BlockSpaceManager):
                 # The sequence hash a new logical block.
                 # Allocate a new physical block.
                 new_block = self.gpu_allocator.allocate()
-                print("DDDDDD NEW "+ str(new_block.block_number))
-                # new_block.ref_count = 1 # seq_group.num_seqs()
                 new_block_table.append(new_block)
                 ret[1].append(new_block.block_number)
-                #ret.append((block_table[i].block_number, new_block.block_number))
         self.block_tables[seq.seq_id] = new_block_table.copy()
-        # for block in block_table:
-        # #     # block.ref_count -= 1
-        # #     # if block.ref_count == 0:
-        #     print("CCCCCreate " + str(block.block_number))
-        #     self.gpu_allocator.free(block)
-        # what about v2??
-        print("create_new_slots")
-        print(ret)
-        # for item in ret:
-        #     print("item")
-        #     print(item)
-            # print(item[0])
-            # print(item[1])
         # Update the block table for this new KV cache slots.
         return (ret, block_table)
 
@@ -451,37 +422,12 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         """Allocate a physical slot for a new token."""
         logical_blocks = seq.logical_token_blocks
         block_table = self.block_tables[seq.seq_id]
-        # print("AAAAAAAAAAAAAAPPEND SLOTS " + str(len(block_table)) + ", " + str(len(logical_blocks)))
-        # for item in logical_blocks:
-        #     print(item.block_number)
-        # print(block_table)
-        # if len(logical_blocks) > 0:
-        #     num_logical_tokens = len(logical_blocks) * 16 - logical_blocks[-1].get_num_empty_slots()
-        #     print(num_logical_tokens)
-        # if self.cache_config.sparse_cache_type == "h2o": 
-        #             percentage = 0.5 
-        #             step = 20 
-        #             times = n_times // step
-        #             temp = position - n_times
-        #             temp = math.floor(temp * percentage)
-        #             for i in range(times):
-        #                 temp += step
-        #                 temp = math.floor(temp * percentage)
-        #             kv_cache_pos = temp + n_times % step
         block_size = 0
         if logical_blocks:
             block_size = logical_blocks[0].block_size
-            # print(block_size)
-        # else:
-        #     print("WTFWTFWTF")
-        # print(seq.data.sparse_last_token_id)
-        # if seq.data.sparse_last_token_id == block_size - 1:
-        #     print("XYZXYZXYZ")
         # If we need to allocate a new physical block
         # if len(block_table) < len(logical_blocks):
             # Currently this code only supports adding one physical block
-            #assert len(block_table) == len(logical_blocks) - 1
-        # if len(block_table) % 16 == 0: #
             if (self.block_sliding_window
                     and len(block_table) >= self.block_sliding_window):
                 # reuse a block

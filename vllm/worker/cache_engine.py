@@ -42,8 +42,6 @@ class CacheEngine:
         else:
             self.dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
-        # Temporarily nothing now.
-
         # Get attention backend.
         self.attn_backend = get_attn_backend(model_config.dtype)
 
@@ -83,18 +81,6 @@ class CacheEngine:
         self.attn_backend.copy_blocks(self.gpu_cache, src_to_dsts)
     
     def sparse_cache_copy(self, src_to_dsts: torch.Tensor, sparse_condition: torch.Tensor) -> None:
-        # layer by layer?
-        # print("SPRASE")
-        # print(src_to_dsts)
-        # print("SPRASE end")
-        # print("SSSSSSSSSSSS")
-        # for i in range(self.num_layers):
-        #     print(i)
-        #     print(self.gpu_cache[i].shape)
-        # print(self.gpu_cache[0][:2])
-        # print(self.num_heads) # 12
-        # print(self.head_size) # 64
-        # print(self.block_size) # 16
         self.attn_backend.sparse_cache_copy(self.gpu_cache, src_to_dsts, sparse_condition, self.num_heads, self.head_size, self.block_size)
 
     @staticmethod
@@ -114,8 +100,6 @@ class CacheEngine:
             dtype = model_config.dtype
         else:
             dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
-        
-        # Temporarily nothing now.
         
         dtype_size = _get_dtype_size(dtype)
         return dtype_size * total

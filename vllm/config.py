@@ -393,7 +393,7 @@ class CacheConfig:
         if self.sparse_cache_type == "auto":
             pass
         elif self.sparse_cache_type == "h2o":
-            self.sparse_percentage = 0.5 # ???
+            self.sparse_percentage = 0.5
             self.sparse_interval = 20
             logger.info(
                 "Using h2o for supporting sparse KV cache. It reduces the GPU "

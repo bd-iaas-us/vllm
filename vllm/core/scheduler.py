@@ -487,7 +487,6 @@ class Scheduler:
                     curr_loras.add(seq_group.lora_int_id)
 
         for item in blocks_to_free:
-            print("CCCCCreate " + str(item.block_number))
             self.block_manager.gpu_allocator.free(item)
         return running_queue, SchedulerRunningOutputs(
             decode_seq_groups=decode_seq_groups,
@@ -606,7 +605,6 @@ class Scheduler:
         swapped_queue.extendleft(leftover_swapped)
         
         for item in blocks_to_free:
-            print("CCCCCreate " + str(item.block_number))
             self.block_manager.gpu_allocator.free(item)
 
         return swapped_queue, SchedulerSwappedInOutputs(
@@ -1071,11 +1069,10 @@ class Scheduler:
                 the new source and destination block indices for the appended
                 slots.
         """
-        print("I am called once") 
         num_lookahead_slots = self._get_num_lookahead_slots(is_prefill=False)
 
         free_blocks : List = []
-        for seq in seq_group.get_seqs(status=SequenceStatus.RUNNING): # ??
+        for seq in seq_group.get_seqs(status=SequenceStatus.RUNNING):
             # If use sparse-kv-cache flag and there is i%n==0 step.
             # Get the original KV blocks
             original_blocks = self.block_manager.get_block_table(seq)
@@ -1084,20 +1081,12 @@ class Scheduler:
             sparse_cows: List[List[int]] = []
             cows = self.block_manager.append_slots(seq, num_lookahead_slots)
             blocks_to_copy.extend(cows)
-            # step = 20 # ??
-            # percentage = 0.5
             if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % self.cache_config.sparse_interval == 0:
-                # if not blocks_to_sparse_copy:
-                #     blocks_to_sparse_copy.extend([[],[]])
                 sparse_cows, free_block = self.block_manager.create_new_slots(seq, self.cache_config.sparse_percentage)
                 free_blocks.extend(free_block)
-                # blocks_to_sparse_copy[0].extend(sparse_cows[0])
-                # blocks_to_sparse_copy[1].extend(sparse_cows[1])
                 blocks_to_sparse_copy.append(sparse_cows)
             # copy the KV blocks from the original KV cache to the new KV cache with the attention score or other tokens priority.
             # Add a new ops method to copy all the KV cache from original to the new one.
-        print("BBBBBBBBBlock sparse copy")
-        print(blocks_to_sparse_copy)
         return free_blocks
 
     def _preempt(

@@ -187,7 +187,6 @@ class ModelRunner:
             self.model = self.lora_manager.create_lora_manager(self.model)
 
         if self.kv_cache_dtype == "fp8" and is_hip():
-            # Temporarily nothing now.
             # Currently scaled KV cache is only enabled on ROCm
             if self.model_config.quantization_param_path is not None:
                 if callable(getattr(self.model, "load_kv_cache_scales", None)):
@@ -285,11 +284,6 @@ class ModelRunner:
             # NOTE(woosuk): Here we assume that the first token in the prompt
             # is always the first token in the sequence.
             input_positions.extend(list(range(context_len, seq_len)))
-            # print("Embedding tokens :")
-            # print(context_len)
-            # print(seq_len)
-            # for item in l:
-            #     print(item)
             lora_id = seq_group_metadata.lora_int_id
 
             if lora_id > 0:
@@ -473,9 +467,7 @@ class ModelRunner:
                 input_tokens.append(generation_token)
 
                 seq_len = seq_data.get_len()
-                # print("SEQ")
-                # print(seq_len)
-                position = seq_len - 1 # ??
+                position = seq_len - 1
                 input_positions.append(position)
 
                 seq_len = seq_len if self.sliding_window is None else min(
@@ -483,29 +475,9 @@ class ModelRunner:
                 seq_lens.append(seq_len)
 
                 block_table = seq_group_metadata.block_tables[seq_id]
-                # print("PPPPPPPPrepare decode")
-                # print(type(block_table))
-                # print(block_table)
-                # print(position)
-                # print(position // self.block_size)
                 n_times = seq_group_metadata.n_times
                 kv_cache_pos = position
-                # print(n_times)
-                # print("N times")
-                
-                # if self.cache_config.sparse_cache_type == "h2o":
-                #     percentage = 0.5 # 0.5 # ??
-                #     step = 20 # ??
-                #     times = n_times // step
-                #     temp = position - n_times
-                #     temp = math.floor(temp * percentage)
-                #     for i in range(times):
-                #         temp += step
-                #         temp = math.floor(temp * percentage)
-                #     kv_cache_pos = temp + n_times % step
                 if self.cache_config.sparse_cache_type == "h2o" and n_times >= 0:
-                    # step = 20 # ??
-                    # percentage = 0.5 # 0.5 # ??
                     step = self.cache_config.sparse_interval
                     percentage = self.cache_config.sparse_percentage
                     times = n_times // step
@@ -519,15 +491,11 @@ class ModelRunner:
                     seq_lens.append(kv_cache_pos % self.block_size + 1 + (len(block_table) - 1) * self.block_size) # Update seq_lens item
 
                 
-                # print("Position: " + str(position) + ", KV cache position: " + str(kv_cache_pos) + " block size: " + str(self.block_size) + " seq_lens: " + str(seq_lens))
-                # print(kv_cache_pos // self.block_size)
-                # print(len(block_table))
                 block_number = block_table[kv_cache_pos // self.block_size]
                 block_offset = kv_cache_pos % self.block_size
                 seq_data.sparse_last_token_id = block_offset
                 slot = block_number * self.block_size + block_offset
                 slot_mapping.append(slot)
-                print("block_number: " + str(block_number) + " block_offset : " + str(block_offset))
                 lora_index_mapping.append(lora_id)
                 lora_prompt_mapping.append(lora_id)
 
@@ -543,8 +511,6 @@ class ModelRunner:
                 if last_page_len == 0:
                     last_page_len = self.block_size
                 paged_kv_last_page_len.append(last_page_len)
-        # print("PPPPPPPPPPrepare decode 1")
-        # print(block_tables)
 
         # vLLM uses cuda graph only for decoding requests.
         # See `capture_model` API for more details.
@@ -566,23 +532,11 @@ class ModelRunner:
                 lora_index_mapping.append(0)
             batch_size = graph_batch_size
 
-        # print("DDEBUG")
-        # print(seq_lens)
-        # print(self.device)
-        # print(type(self.device))
-        # assert torch.cuda.is_available(), "CUDA is not available"
-        # print(torch.cuda.memory_allocated())
-        # print(torch.cuda.memory_reserved())
-        # seq_lens = [41, 26, 6, 6]
-        # print(seq_lens)
-        # print("PPPPPPPPPPrepare decode 2")
-        # print(block_tables)
         seq_lens_tensor = torch.tensor(seq_lens,
                                        dtype=torch.int32,
                                        device=self.device)
 
         if use_captured_graph:
-            # print("Interesting")
             # When using cuda-graph all these tensors should be
             # padded.
             assert seq_lens_tensor.shape[0] == len(input_tokens)
@@ -592,18 +546,13 @@ class ModelRunner:
             # The shape of graph_block_tables is
             # [max batch size, max context len // block size].
             input_block_tables = self.graph_block_tables[:batch_size]
-            # print(batch_size)
-            # print(input_block_tables)
             for i, block_table in enumerate(block_tables):
                 if block_table:
                     input_block_tables[i, :len(block_table)] = block_table
-            # print(input_block_tables)
             block_tables = torch.tensor(input_block_tables, device=self.device)
         else:
             max_block_table_len = max(
                 len(block_table) for block_table in block_tables)
-            # print("PPPPPPPPPPPPPPPPPPPPPPPrepare max_block_table_len")
-            # print(max_block_table_len)
             block_tables = make_tensor_with_pad(
                 block_tables,
                 max_len=max_block_table_len,
@@ -611,8 +560,6 @@ class ModelRunner:
                 dtype=torch.int,
                 device=self.device,
             )
-        # print("PPPPPPPPPPrepare decode 3")
-        # print(block_tables)
         if self.attn_backend.get_name() == "flashinfer":
             if not hasattr(self, "flashinfer_workspace_buffer"):
                 # Allocate 16MB workspace buffer
@@ -648,8 +595,6 @@ class ModelRunner:
                 data_type=kv_cache_dtype,
                 sparse_cache_type=sparse_cache_type)
         else:
-            # print("QQQQQQ")
-            # print(block_tables)
             attn_metadata = self.attn_backend.make_metadata(
                 is_prompt=False,
                 seq_lens=None,
@@ -708,9 +653,6 @@ class ModelRunner:
                 decode_lora_requests,
                 decode_slot_mapping,
             ) = self._prepare_decode(decode_reqs)
-            # print("OOOOOOOOOOOOOOuch")
-            # print(prefill_attn_metadata)
-            # print(decode_attn_metadata)
             sampling_metadata = SamplingMetadata.prepare(
                 seq_group_metadata_list, seq_lens, query_lens, self.device,
                 self.pin_memory)
@@ -725,10 +667,7 @@ class ModelRunner:
             # Coalesce tensors. Note that attn_metadata is currently not
             # coalesced for simplicity.
             input_tokens.extend(decode_input_tokens)
-            # print("input_positions")
-            # print(len(input_positions))
             input_positions.extend(decode_input_positions)
-            # print(len(decode_input_positions))
             slot_mapping.extend(decode_slot_mapping)
             lora_index_mapping.extend(decode_lora_index_mapping)
             lora_prompt_mapping.extend(decode_lora_prompt_mapping)
@@ -829,8 +768,6 @@ class ModelRunner:
                 decode_attn_metadata = self.attn_backend.make_metadata(
                     **metadata_dict)
 
-        # print("LLLLLLLLLLLet us see")
-        # print(decode_attn_metadata)
         attn_metadata = AttentionMetadata(
             num_prefills=num_prefills,
             slot_mapping=slot_mapping,
@@ -853,43 +790,23 @@ class ModelRunner:
         kv_caches: List[torch.Tensor],
         sparse_condition: Optional[List[torch.Tensor]],
     ) -> Optional[SamplerOutput]:
-        print("execute_model starts")
-        print("seq_group_metadata_list " + str(len(seq_group_metadata_list)))
-        print("kv_caches " + str(len(kv_caches)))
-        # if kv_caches[0] is not None:
-        #     print(kv_caches[0].shape)
-        #     print("execute_model middle")
-            #print(kv_caches[0][1][-5:, :100])
         (input_tokens, input_positions, attn_metadata, sampling_metadata,
          lora_requests, lora_mapping, multi_modal_input
          ) = self.prepare_input_tensors(seq_group_metadata_list)
-        # if kv_caches[0] is not None:
-        #     print(kv_caches[0].shape)
-        #     print("execute_model middle")
-            #print(kv_caches[0][1][-5:, :100])
-        # print("CCCCCCCC")
-        #print(sparse_condition)
+
         if sparse_condition is not None:
-            # print("NUMBERNUMBERNUMBER")
-            num_blocks = 0 # ??
+            num_blocks = 0
             num_seqs = 0
             if attn_metadata and attn_metadata.prefill_metadata:
                 num_blocks = max(len(block_table) for block_table in attn_metadata.prefill_metadata.block_tables)
-                # print(num_blocks)
-                # print("PREFILLL")
+
             if attn_metadata and attn_metadata.decode_metadata:
                 num_blocks = max(len(block_table) for block_table in attn_metadata.decode_metadata.block_tables)
-                # print(num_blocks)
             
             if attn_metadata:
                 num_seqs = attn_metadata.num_decode_tokens + attn_metadata.num_prefill_tokens
             
-            # print("num_seqs " +str(num_seqs))
-            # print("num_blocks " +str(num_blocks))
-            sparse_condition[0] = torch.zeros((len(kv_caches), num_seqs, self.block_size * num_blocks), dtype=torch.int64) # 3 ??
-            # print("VVVVVVVVV")
-            # print(sparse_condition)
-            #sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
+            sparse_condition[0] = torch.zeros((len(kv_caches), num_seqs, self.block_size * num_blocks), dtype=torch.int64)
 
         if self.lora_config:
             self.set_active_loras(lora_requests, lora_mapping)
@@ -914,15 +831,10 @@ class ModelRunner:
         if self.cache_config.sparse_cache_type != 'auto' and sparse_condition is not None:
             execute_model_kwargs["sparse_condition"] = sparse_condition[0]
             execute_model_kwargs["sparse_type"] = (self.cache_config.sparse_cache_type, self.cache_config.sparse_interval, self.cache_config.sparse_percentage)
-        # print("input_positions shape")
-        # print(input_positions.shape)
-        # print(input_positions)
+        
         if self.vision_language_config:
             execute_model_kwargs.update({"image_input": multi_modal_input})
         hidden_states = model_executable(**execute_model_kwargs)
-        # print("input_positions shape after")
-        # print(hidden_states.shape)
-        # print(sparse_condition)
 
         # Compute the logits.
         logits = self.model.compute_logits(hidden_states, sampling_metadata)

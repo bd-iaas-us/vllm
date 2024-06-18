@@ -66,9 +66,6 @@ class XFormersBackend(AttentionBackend):
         head_size: int, 
         block_size: int,
     ) -> None:
-        # print("XXXXXSPRASE")
-        # print(src_to_dists)
-        # print("XXXXSPRASE end")
         PagedAttention.sparse_cache_copy(kv_caches, src_to_dists, sparse_condition, num_heads, head_size, block_size)
 
 
@@ -207,17 +204,10 @@ class XFormersImpl(AttentionImpl):
         query = query.view(-1, self.num_heads, self.head_size)
         key = key.view(-1, self.num_kv_heads, self.head_size)
         value = value.view(-1, self.num_kv_heads, self.head_size)
-        # print("XXXXX")
-        # print(sparse_condition.shape)
 
         if kv_cache is not None:
             key_cache, value_cache = PagedAttention.split_kv_cache(
                 kv_cache, self.num_kv_heads, self.head_size)
-            # print("KKKKK")
-            # print(key_cache.shape)
-            # print(value_cache.shape)
-            # print(kv_scale)
-
             
             # Reshape the input keys and values and store them in the cache.
             # If kv_cache is not provided, the new key and value tensors are
@@ -230,11 +220,7 @@ class XFormersImpl(AttentionImpl):
 
         num_prefill_tokens = attn_metadata.num_prefill_tokens
         num_decode_tokens = attn_metadata.num_decode_tokens
-        # print("XFormersImpl forward")
-        # print(key.shape[0])
-        # print(value.shape[0])
-        # print(num_prefill_tokens)
-        # print(num_decode_tokens)
+
         assert key.shape[0] == num_prefill_tokens + num_decode_tokens
         assert value.shape[0] == num_prefill_tokens + num_decode_tokens
 
@@ -246,9 +232,6 @@ class XFormersImpl(AttentionImpl):
         key = key[:num_prefill_tokens]
         value = value[:num_prefill_tokens]
 
-        # print("Query forward")
-        # print(query.shape[0])
-        # print(num_prefill_tokens)
         assert query.shape[0] == num_prefill_tokens
         assert decode_query.shape[0] == num_decode_tokens
 

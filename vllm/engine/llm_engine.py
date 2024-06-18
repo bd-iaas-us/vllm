@@ -667,7 +667,6 @@ class LLMEngine:
             >>>     if not (engine.has_unfinished_requests() or example_inputs):
             >>>         break
         """
-        print("STEP starts")
         seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
 
         if not scheduler_outputs.is_empty():
@@ -692,8 +691,6 @@ class LLMEngine:
         # Log stats.
         self.do_log_stats(scheduler_outputs, output)
 
-        #pprint
-        #print(request_outputs)
         return request_outputs
 
     def do_log_stats(

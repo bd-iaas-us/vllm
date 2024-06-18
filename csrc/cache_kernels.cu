@@ -151,7 +151,7 @@ void copy_blocks(
 namespace vllm {
 
 // template<typename scalar_t, typename cache_t, Fp8KVCacheDataType kv_dt>
-// Grid: (num_layers, num_seqs, block_size * 3)
+// Grid: (num_layers, num_seqs, block_size * num_blocks)
 template<typename scalar_t>
 __global__ void sparse_cache_copy_kernel(
   int64_t* key_cache_ptrs,
@@ -162,33 +162,24 @@ __global__ void sparse_cache_copy_kernel(
   const int64_t* __restrict__ selection_index_dst,
   const int num_heads,
   const int head_size,
-  //const int block_size,
   const int x) {
-  const int layer_idx = blockIdx.x; // 0-11
-  const int seq_idx = blockIdx.y; // 0-3
-  const int selected_pairs_idx = blockIdx.z; // 0-15 or 0-47
+  const int layer_idx = blockIdx.x;
+  const int seq_idx = blockIdx.y;
+  const int selected_pairs_idx = blockIdx.z;
 
   const int num_layers = gridDim.x;
   const int num_seqs = gridDim.y;
-  const int block_size_times_num = gridDim.z; // 48
+  const int block_size_times_num = gridDim.z;
   const int block_size = 16;
 
-  // const int num_heads = 12;
-  // const int head_size = 64;
-  // const int x = 8;
   const int num_selected_index = layer_idx * num_seqs * block_size_times_num + seq_idx * block_size_times_num + selected_pairs_idx;
-  // const int64_t block_idx = slot_idx / block_size; // 22053
-  // const int64_t block_offset = slot_idx % block_size; // 0, 1, 2...
 
   const int64_t src_token_idx  = selection_index_src[num_selected_index];
   const int64_t tgt_token_idx  = selection_index_dst[num_selected_index];
   if (src_token_idx < 0 || src_token_idx > num_layers * num_seqs * block_size_times_num) {
     return;
   }
-
-//if (layer_idx == 0 && (seq_idx == 0 ||seq_idx == 1)) {
-  //printf("src_token_idx: %d, tgt_token_idx: %d, ", src_token_idx, tgt_token_idx);
-//}
+  
   scalar_t* key_cache = reinterpret_cast<scalar_t*>(key_cache_ptrs[layer_idx]);
   scalar_t* value_cache = reinterpret_cast<scalar_t*>(value_cache_ptrs[layer_idx]);
 
@@ -200,22 +191,14 @@ __global__ void sparse_cache_copy_kernel(
     
     // 192 / 16
     const int64_t block_idx = block_mapping_src[src_token_layer_idx / block_size];
-    // TORCH_CHECK(block_idx != -1);
     const int64_t block_offset = src_token_layer_idx % block_size;
 
     const int64_t tgt_block_idx = block_mapping_dst[tgt_token_layer_idx / block_size];
     const int64_t tgt_block_offset = tgt_token_layer_idx % block_size;
 
-    
-
     if (block_idx == -1 || tgt_block_idx == -1) {
       continue;
     }
-
-    //if (layer_idx == 0 && (seq_idx == 0 ||seq_idx == 1)) {
-    //printf("src_token_layer_idx: %lld, tgt_token_layer_idx: %lld, block_idx %lld, block_offset %lld, ", src_token_layer_idx, tgt_token_layer_idx, block_idx, block_offset);
-    //printf("tgt_block_idx: %lld, tgt_block_offset: %lld, ", tgt_block_idx, tgt_block_offset);
-    //}
 
     const int head_idx = i / head_size;
     const int head_offset = i % head_size;
@@ -245,13 +228,6 @@ __global__ void sparse_cache_copy_kernel(
                                   + tgt_block_offset; // 1/16 block_size
     key_cache[tgt_key_idx] = tgt_key;
     value_cache[tgt_value_idx] = tgt_value;
-    // if constexpr (kv_dt == Fp8KVCacheDataType::kAuto) {
-    //   key_cache[tgt_key_idx] = tgt_key;
-    //   value_cache[tgt_value_idx] = tgt_value;
-    // } else {
-    //   key_cache[tgt_key_idx] = fp8::scaled_convert<cache_t, scalar_t, kv_dt>(tgt_key, kv_scale);
-    //   value_cache[tgt_value_idx] = fp8::scaled_convert<cache_t, scalar_t, kv_dt>(tgt_value, kv_scale); ??
-    // }
   }
 }
 
@@ -271,23 +247,8 @@ void sparse_cache_copy(
   const int total_num_blocks = block_mapping_src_tensor.size(1); // 3 or 1
 
   const int num_layers = key_caches.size();
-  // int num_tokens = key.size(0);
-  // int num_heads = key.size(1);
-  // int head_size = key.size(2);
-  // int block_size = key_cache.size(3);
-  // int x = key_cache.size(4);
-  // xx, 12, 2, 16, 8
-  // 22054 * 12288
-  // printf("Key caches SIZE %d, %d, %d, %d\n", key_caches[0].size(0), key_caches[0].size(1), key_caches[0].size(2), key_caches[0].size(3));
-  // const int num_seqs = 4;
-  //const int num_heads = 12;
-  //const int head_size = 64;
-  //const int block_size = 16;
-  const int x = 8; // constexpr int x = 16 / sizeof(cache_t); x = 16 // kv_cache.element_size() ??
+  const int x = 8;
   
-  // int x = key_cache.size(4);
-  // int block_mapping_dst_number = static_cast<int64_t>(block_mapping_dst.size());
-  printf("This is sparse copy %d, %d, %d %d\n", num_layers, value_caches.size(), selection_index_src_tensor.size(0), total_num_blocks);
   TORCH_CHECK(num_layers == value_caches.size());
   TORCH_CHECK(selection_index_src_tensor.size(0) == num_layers * block_size * num_seqs * total_num_blocks);
   if (num_layers == 0) {
@@ -304,12 +265,6 @@ void sparse_cache_copy(
     value_cache_ptrs[layer_idx] = reinterpret_cast<int64_t>(value_caches[layer_idx].data_ptr());
   }
 
-  int num_selected_pairs = selection_index_src_tensor.size(0);
-  printf("num_selected_pairs %d\n", num_selected_pairs);
-
-  // int numel_per_block = key_caches[0][0].numel();
-
-
   torch::Tensor flat_block_mapping_src_tensor = torch::flatten(block_mapping_src_tensor);
   torch::Tensor flat_block_mapping_dst_tensor = torch::flatten(block_mapping_dst_tensor);
 
@@ -325,9 +280,8 @@ void sparse_cache_copy(
 
 
   // Launch the kernel.
-  dim3 grid(num_layers, num_seqs, block_size * total_num_blocks); // num_selected_pairs/num_layers
-  printf("num_layers %d, num_selected_pairs %d, num_seqs %d, total_num_blocks %d, flat_block_mapping_src_tensor size %d, flat_block_mapping_dst_tensor %d\n", num_layers, num_selected_pairs, num_seqs, total_num_blocks, flat_block_mapping_src_tensor.size(0), flat_block_mapping_dst_tensor.size(0));
-  dim3 block(std::min(num_heads * head_size, 64)); // ??
+  dim3 grid(num_layers, num_seqs, block_size * total_num_blocks);
+  dim3 block(std::min(num_heads * head_size, 64));
   const at::cuda::OptionalCUDAGuard device_guard(cache_device);
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
   VLLM_DISPATCH_FLOATING_AND_BYTE_TYPES(
@@ -341,7 +295,6 @@ void sparse_cache_copy(
         selection_index_dst_tensor_cuda.data_ptr<int64_t>(),
         num_heads,
         head_size,
-        //const int block_size,
         x);
     }));
 }

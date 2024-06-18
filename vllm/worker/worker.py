@@ -90,9 +90,8 @@ class Worker(WorkerBase):
         # Initialize gpu_cache as embedding models don't initialize kv_caches
         self.gpu_cache: Optional[List[torch.tensor]] = None
         
-        # Uninitialized cache engine. Will be initialized by
-        # initialize_cache.
-        self.sparse_condition = [None] # torch.ones((12, 4, self.cache_config.block_size * 3), dtype=torch.int64) # 12, 4, 16 * 3 ??
+        # Uninitialized sparse condition.
+        self.sparse_condition = [None]
 
     def init_device(self) -> None:
         if self.device_config.device.type == "cuda":
@@ -200,7 +199,6 @@ class Worker(WorkerBase):
         # the model initialization and profiling.
         set_random_seed(self.model_config.seed)
 
-    # ?? CPU worker
     def cache_swap(
         self,
         blocks_to_swap_in: torch.Tensor,
@@ -216,10 +214,6 @@ class Worker(WorkerBase):
             self.cache_engine.swap_out(blocks_to_swap_out)
         if blocks_to_copy.numel() > 0:
             self.cache_engine.copy(blocks_to_copy)
-        print("LLLLLLLLength " + str(len(blocks_to_sparse_copy)))
-        for item in blocks_to_sparse_copy:
-            print("TEMP")
-            print(item)
         if self.cache_config.sparse_cache_type == 'h2o' and blocks_to_sparse_copy.numel() > 0:
             self.cache_engine.sparse_cache_copy(blocks_to_sparse_copy, sparse_condition)
 
@@ -228,7 +222,6 @@ class Worker(WorkerBase):
         self,
         execute_model_req: Optional[ExecuteModelRequest] = None
     ) -> List[Union[SamplerOutput, PoolerOutput]]:
-        print("IIIIIIIII am called once at execute_model")
         if execute_model_req is None:
             seq_group_metadata_list = None
         else:
@@ -238,14 +231,6 @@ class Worker(WorkerBase):
         blocks_to_swap_out: torch.Tensor
         blocks_to_copy: torch.Tensor
         blocks_to_sparse_copy: torch.Tensor
-        # length = self.cache_engine.num_layers * self.cache_engine.block_size
-        # sparse_condition = torch.ones(self.cache_engine.num_layers * self.cache_engine.block_size * 4)
-        # sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
-        # for i in range(self.cache_engine.num_layers):
-        #     for j in range(num_requests):
-        #         for k in range(0, 16, 1): # 5 out of 16
-        #             sparse_condition[i, j, k] = 1
-        # print(sparse_condition)
         if self.is_driver_worker:
             assert seq_group_metadata_list is not None
             assert execute_model_req is not None
@@ -266,8 +251,6 @@ class Worker(WorkerBase):
             blocks_to_copy = torch.tensor(execute_model_req.blocks_to_copy,
                                           device=self.device,
                                           dtype=torch.int64).view(-1, 2)
-            print("WORKER")
-            print(execute_model_req.blocks_to_sparse_copy)
             padded_data = []
             if len(execute_model_req.blocks_to_sparse_copy) > 0:
                 fill_value = -1
@@ -279,10 +262,6 @@ class Worker(WorkerBase):
                         padded_sublist.append(padded_inner_list)
                     padded_data.append(padded_sublist)
             blocks_to_sparse_copy = torch.tensor(padded_data)
-            # blocks_to_sparse_copy = torch.tensor(execute_model_req.blocks_to_sparse_copy, 
-            #                                      device=self.device, 
-            #                                      dtype=torch.int64).view(-1, 2)
-            print(blocks_to_sparse_copy)
             data: Dict[str, Any] = {
                 "num_seq_groups": num_seq_groups,
                 "blocks_to_swap_in": blocks_to_swap_in,
@@ -304,20 +283,9 @@ class Worker(WorkerBase):
         # If there is no input, we don't need to execute the model.
         if num_seq_groups == 0:
             return []
-        
-        #print("BEFOREEEE")
-        num_requests = len(seq_group_metadata_list)
-        #print(num_requests)
-        #print(self.sparse_condition)
-        # if num_requests > 100: # ???
-        #     num_requests = 4
-        #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
-        #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size * 7), dtype=torch.int64) # ??
 
         output = self.model_runner.execute_model(seq_group_metadata_list,
                                                  self.gpu_cache, sparse_condition=self.sparse_condition)
-        #print("AFTERRRRR")
-        #print(self.sparse_condition)
 
         # Worker only supports single-step execution. Wrap the output in a list
         # to conform to interface.

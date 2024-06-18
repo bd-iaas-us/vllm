@@ -52,8 +52,6 @@ class CPUCacheEngine:
         else:
             self.dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
-        # Temporarily nothing now.
-
         # Get attention backend.
         self.attn_backend = get_attn_backend(model_config.dtype)
 
@@ -100,8 +98,6 @@ class CPUCacheEngine:
             dtype = model_config.dtype
         else:
             dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_dtype]
-        
-        # Temporarily nothing now.
 
         dtype_size = torch.tensor([], dtype=dtype).element_size()
         return dtype_size * total
