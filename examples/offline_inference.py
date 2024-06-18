@@ -22,16 +22,16 @@ prompts = [
     "The president of the United States is Donald Trump, who has been involved in a lawsuit, and he has been regarded ",
     "The capital of France is",
     "The future of AI is",
-    # "Hello, my name is Tony, I like everything in",
-    # "Hello, my name is",
-    # "The president of the United States is Trump",
-    # "The capital of France is where ",
-    # "The future of AI is now",
-    # "I love Japanese",
-    # "I love Chinese",
-    # "I love American",
-    # "I love African",
-    # "I love White",
+    "Hello, my name is Tony, I like everything in",
+    "Hello, my name is",
+    "The president of the United States is Trump",
+    "The capital of France is where ",
+    "The future of AI is now",
+    "I love Japanese",
+    "I love Chinese",
+    "I love American",
+    "I love African",
+    "I love White",
 ]
 # Create a sampling params object.
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95)
@@ -39,7 +39,11 @@ sampling_params = SamplingParams(temperature=0.8, top_p=0.95)
 # Create an LLM.
 #llm = LLM(model="facebook/opt-125m", tensor_parallel_size = 1, kv_cache_dtype='auto')
 #llm = LLM(model="facebook/opt-125m", tensor_parallel_size = 1, max_model_len=100, kv_cache_dtype='auto')
-llm = LLM(model="facebook/opt-125m", tensor_parallel_size = 1, max_model_len=100, kv_cache_dtype='auto', sparse_kv_cache_type='h2o')
+
+llm = LLM(model="facebook/opt-125m", tensor_parallel_size = 1, max_model_len=100, kv_cache_dtype='auto', sparse_kv_cache_type='h2o', enforce_eager=True)
+#llm = LLM(model="facebook/opt-125m", tensor_parallel_size = 1, max_model_len=100, kv_cache_dtype='auto', enforce_eager=True)
+
+
 #llm = LLM(model="meta-llama/Llama-2-7b-chat-hf", tensor_parallel_size = 1, max_model_len=100, kv_cache_dtype='auto', sparse_kv_cache_type='h2o')
 #llm = LLM(model="meta-llama/Llama-2-7b-chat-hf", tensor_parallel_size = 1, gpu_memory_utilization=0.95, max_model_len=100, kv_cache_dtype='auto', sparse_kv_cache_type='h2o')
 # Generate texts from the prompts. The output is a list of RequestOutput objects

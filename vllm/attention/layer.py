@@ -46,9 +46,9 @@ class Attention(nn.Module):
         kv_scale: float = 1.0,
         sparse_condition: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        print("FFFFFFFFFFF")
-        print(kv_scale)
-        print(sparse_condition.shape)
+        # print("FFFFFFFFFFF")
+        # print(kv_scale)
+        # print(sparse_condition.shape)
         return self.impl.forward(query, key, value, kv_cache, attn_metadata,
                                  kv_scale, sparse_condition)
 

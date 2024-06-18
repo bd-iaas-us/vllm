@@ -100,16 +100,16 @@ class OPTAttention(nn.Module):
     ) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.chunk(chunks=3, dim=-1)
-        print("Forward")
-        print(q.shape)
-        print(k.shape)
-        print(v.shape)
-        if kv_cache is not None:
-            print("kv_cache shape")
-            print(kv_cache.shape)
-        print(sparse_condition.shape)
+        # print("Forward")
+        # print(q.shape)
+        # print(k.shape)
+        # print(v.shape)
+        # if kv_cache is not None:
+        #     print("kv_cache shape")
+        #     print(kv_cache.shape)
+        # print(sparse_condition.shape)
         attn_output = self.attn(q, k, v, kv_cache, attn_metadata, 1.0, sparse_condition) #?? kv_scale, sparse_condition
-        print("WTF here")
+        # print("WTF here")
         # print(sparse_condition)
         output, _ = self.out_proj(attn_output)
         return output
@@ -253,17 +253,17 @@ class OPTDecoder(nn.Module):
         attn_metadata: AttentionMetadata,
         sparse_condition: Optional[torch.Tensor],
     ) -> torch.Tensor:
-        print("OPTDecoder forward start")
-        print(attn_metadata.slot_mapping.shape)
-        print(input_ids.size(0))
-        print(input_ids)
-        print(positions)
-        print(positions.shape)
-        print(attn_metadata.num_decode_tokens)
-        print(attn_metadata.num_prefills)
-        print(attn_metadata.slot_mapping)
-        print(attn_metadata.slot_mapping // 16)
-        print(attn_metadata.slot_mapping % 16)
+        # print("OPTDecoder forward start")
+        # print(attn_metadata.slot_mapping.shape)
+        # print(input_ids.size(0))
+        # print(input_ids)
+        # print(positions)
+        # print(positions.shape)
+        # print(attn_metadata.num_decode_tokens)
+        # print(attn_metadata.num_prefills)
+        # print(attn_metadata.slot_mapping)
+        # print(attn_metadata.slot_mapping // 16)
+        # print(attn_metadata.slot_mapping % 16)
         # key_cache.size(3)
         # tensor([0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5], device='cuda:0') 
         # tensor([6, 8, 6, 6], device='cuda:0')
@@ -277,17 +277,17 @@ class OPTDecoder(nn.Module):
         if self.project_in is not None:
             inputs_embeds, _ = self.project_in(inputs_embeds)
         hidden_states = inputs_embeds + pos_embeds
-        print("OPTDecoder forward in the middle")
-        if sparse_condition is not None:
-            print(sparse_condition.shape)
-            print(sparse_condition.size(2))
-        if kv_caches[0] is not None:
-            print(kv_caches[0].shape)
-        print(self.config)
-        print(self.config.num_hidden_layers)
-        print(self.config.num_attention_heads)
+        # print("OPTDecoder forward in the middle")
+        # if sparse_condition is not None:
+        #     print(sparse_condition.shape)
+        #     print(sparse_condition.size(2))
+        # if kv_caches[0] is not None:
+        #     print(kv_caches[0].shape)
+        # print(self.config)
+        # print(self.config.num_hidden_layers)
+        # print(self.config.num_attention_heads)
         # print(hidden_states[0])
-        print(hidden_states.shape)
+        # print(hidden_states.shape)
 
 
         # block_size = 16
@@ -303,17 +303,17 @@ class OPTDecoder(nn.Module):
             seq_size = 4
 
         head_size = self.config.num_attention_heads # 12 ?
-        percentage = 0.5 # 0.5 # ??
+        percentage = 1.0 # 0.5 # ??
 
         # sparse_condition_size = len(self.layers) * seq_size * block_size
         # if sparse_condition is None: # ??
         #     sparse_condition = torch.zeros((len(self.layers), seq_size, block_dimensions), dtype=torch.int64)
         # else:
         #     sparse_condition_size = sparse_condition.size(0)
-        print("WWWWWWWWWWWW")
+        # print("WWWWWWWWWWWW")
         if sparse_condition is not None:
             sparse_condition.zero_()
-            print(sparse_condition.shape)
+            # print(sparse_condition.shape)
             # print(sparse_condition)
 
         def find_increasing_subsequences_lengths(tensor: torch.Tensor):
@@ -338,22 +338,23 @@ class OPTDecoder(nn.Module):
             layer_sparse_condition = torch.zeros(seq_size * block_dimensions * head_size, dtype=torch.float32)
             # split layers to do
             hidden_states = layer(hidden_states, kv_caches[i], attn_metadata, layer_sparse_condition)
-            # print(layer_sparse_condition)
+            #print(layer_sparse_condition)
             layer_sparse_condition_2d = layer_sparse_condition.view(seq_size, block_dimensions, head_size).mean(dim=2) # 4 * 16
+            #print(layer_sparse_condition_2d)
             # temp_sparse_condition = (temp_sparse_condition * i + layer_sparse_condition) / (i + 1)
             # print(layer_sparse_condition_2d)
             #print("QUTA")
-            print(i)
-            print(positions)
+            # print(i)
+            # print(positions)
             # print(sparse_condition)
             for j in range(seq_size):
                 num_to_select = math.ceil(block_dimensions * percentage) # ????
                 # 1. sparse condition continue for multiple rounds
                 n_times = self.n_times
-                print("NTNTNT" + str(n_times))
+                # print("NTNTNT" + str(n_times))
                 # print(sparse_condition)
                 if n_times >= 0:
-                    percentage = 0.5 # 0.5 # ??
+                    percentage = 1.0 # 0.5 # ??
                     step = 20 # ??
                     times = n_times // step
                     temp = positions[j] + 1 - n_times # after inserting one token
@@ -365,36 +366,44 @@ class OPTDecoder(nn.Module):
                 # print("NUMBERNUMBER" + str(num_to_select))
                 # print(sparse_condition)
                 # print("RRRRNUMBERNUMBER")
-                _, top_indices = torch.topk(torch.abs(layer_sparse_condition_2d[j]), num_to_select) #?? absolute value
+                if num_to_select <= 0 or layer_sparse_condition_2d[j].size(0) == 0:
+                    continue
+                # print(layer_sparse_condition_2d[j].shape)
+                #print(layer_sparse_condition_2d[j])
+                # print(num_to_select-1)
+                _, top_indices = torch.topk(torch.abs(layer_sparse_condition_2d[j][1:]), num_to_select-1) #?? absolute value
                 # print(sparse_condition)
                 # print(top_indices)
                 is_all_zero = torch.all(layer_sparse_condition_2d[j] == 0)
-                print("ALL zero")
+                # print("ALL zero")
                 if is_all_zero: # prefill case ??
                     temp_length = find_increasing_subsequences_lengths(positions)
-                    print("TTTTTTTT")
-                    print(temp_length)
-                    print("zzzzzero")
-                    print(j)
-                    print(len(temp_length))
+                    # print("TTTTTTTT")
+                    # print(temp_length)
+                    # print("zzzzzero")
+                    # print(j)
+                    # print(len(temp_length))
                     #num_to_select = math.floor(temp_length[j] * percentage)
                     num_to_select = temp_length[j]
                     print(num_to_select)
                     top_indices = [i for i in range(num_to_select)]
                 # print(num_to_select)
                 # print(top_indices)
-                print("IIIIIIIIIIIIIIIIIIIIIIIIIII:" + str(i))
-                print(top_indices)
-                print(block_dimensions)
+                # print("IIIIIIIIIIIIIIIIIIIIIIIIIII:" + str(i))
+                # print(top_indices)
+                # print(block_dimensions)
                 # print(sparse_condition)
                 for k in range(block_dimensions):
-                    # if k == 0: # starting token
-                    #     sparse_condition[i, j, k] = 1
-                    if k in top_indices:
-                        print("KKKK " + str(k))
+                    if k == 0: # starting token
+                        # print(i)
+                        # print(j)
+                        # print(k)
                         sparse_condition[i, j, k] = 1
-                    else:
-                        sparse_condition[i, j, k] = 0
+                    if k in top_indices:
+                        # print("KKKK " + str(k))
+                        sparse_condition[i, j, k] = 1
+                    # else:
+                    #     sparse_condition[i, j, k] = 0
                 
         #print("WTF man")
         # print(sparse_condition)

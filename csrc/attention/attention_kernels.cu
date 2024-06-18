@@ -131,6 +131,9 @@ __device__ void paged_attention_kernel(
   const int start_token_idx = start_block_idx * BLOCK_SIZE;
   const int end_token_idx = MIN(start_token_idx + num_blocks * BLOCK_SIZE, seq_len);
   const int num_tokens = end_token_idx - start_token_idx;
+  // printf("seq_len %d, start_block_idx %d, end_block_idx %d, num_blocks %d, ", seq_len, start_block_idx, end_block_idx, num_blocks);
+  // printf("seq_idx %d, start_token_idx %d, end_token_idx %d, num_tokens %d, ", seq_idx, start_token_idx, end_token_idx, num_tokens);
+  // printf("max_num_blocks_per_seq %d, BLOCK_SIZE %d, ", max_num_blocks_per_seq, BLOCK_SIZE);
 
   constexpr int THREAD_GROUP_SIZE = MAX(WARP_SIZE / BLOCK_SIZE, 1);
   constexpr int NUM_THREAD_GROUPS = NUM_THREADS / THREAD_GROUP_SIZE; // Note: This assumes THREAD_GROUP_SIZE divides NUM_THREADS
@@ -251,14 +254,14 @@ __device__ void paged_attention_kernel(
         qk_max = mask ? qk_max : fmaxf(qk_max, qk);
 
         // int score_idx = seq_idx * block_size * num_heads + token_idx * num_heads + head_idx;
-        // printf("max_num_blocks_per_seq %d, BLOCK_SIZE %d", max_num_blocks_per_seq, BLOCK_SIZE);
         // printf("q_stride %d, kv_block_stride %d, kv_head_stride %d, BLOCK_SIZE * maximal_blocks * num_heads", q_stride, kv_block_stride, kv_head_stride, BLOCK_SIZE * maximal_blocks * num_heads);
         // int score_idx = seq_idx * BLOCK_SIZE * maximal_blocks * num_heads + token_idx * num_heads + head_idx;
-        int score_idx = seq_idx * BLOCK_SIZE * max_num_blocks_per_seq * num_heads + token_idx * num_heads + head_idx; // ???
-        if (!mask) {
+        // int score_idx = seq_idx * BLOCK_SIZE * max_num_blocks_per_seq * num_heads + (token_idx - start_token_idx) * num_heads + head_idx; // ???
+        if (attention_scores != nullptr && !mask && physical_block_number != 0) {
+          // printf("seq_idx %d, block_idx %d, physical_block_number %lld, physical_block_offset %d, token_idx %d, start_token_idx %d", seq_idx, block_idx, physical_block_number, physical_block_offset, token_idx, start_token_idx);
           // printf("score_idx %d , seq_idx %d, token_idx %d, head_idx %d, token_idx - start_token_idx %d. ", score_idx, seq_idx, token_idx, head_idx, token_idx - start_token_idx);
-          attention_scores[score_idx] = logits[token_idx - start_token_idx];
           // printf("attention_scores[%d]: %f", score_idx, attention_scores[score_idx]);
+          attention_scores[seq_idx * BLOCK_SIZE * max_num_blocks_per_seq * num_heads + (token_idx - start_token_idx) * num_heads + head_idx] = logits[token_idx - start_token_idx];
         }
       }
     }
@@ -678,7 +681,10 @@ void paged_attention_v1_launcher(
   TORCH_CHECK(cpu_device.is_cpu());
   torch::Tensor attention_scores_tensor = attention_scores.to(cache_device);
   printf("Launcher attention_scores size %d\n", attention_scores_tensor.size(0));
-  float* attention_scores_ptr = reinterpret_cast<float*>(attention_scores_tensor.data_ptr());
+  float* attention_scores_ptr = nullptr;
+  if (attention_scores_tensor.size(0) > 0) {
+    attention_scores_ptr = reinterpret_cast<float*>(attention_scores_tensor.data_ptr());
+  }
 
   constexpr int NUM_WARPS = NUM_THREADS / WARP_SIZE;
   int padded_max_seq_len = DIVIDE_ROUND_UP(max_seq_len, BLOCK_SIZE) * BLOCK_SIZE;

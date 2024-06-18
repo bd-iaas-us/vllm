@@ -84,13 +84,13 @@ class CacheEngine:
     
     def sparse_cache_copy(self, src_to_dsts: torch.Tensor, sparse_condition: torch.Tensor) -> None:
         # layer by layer?
-        print("SPRASE")
-        print(src_to_dsts)
-        print("SPRASE end")
-        print("SSSSSSSSSSSS")
-        for i in range(self.num_layers):
-            print(i)
-            print(self.gpu_cache[i].shape)
+        # print("SPRASE")
+        # print(src_to_dsts)
+        # print("SPRASE end")
+        # print("SSSSSSSSSSSS")
+        # for i in range(self.num_layers):
+        #     print(i)
+        #     print(self.gpu_cache[i].shape)
         # print(self.gpu_cache[0][:2])
         # print(self.num_heads) # 12
         # print(self.head_size) # 64

@@ -69,20 +69,20 @@ class PagedAttention:
         kv_scale: float,
     ) -> None:
         # torch.set_printoptions(threshold=float('inf'))
-        print("write_to_paged_cache 11")
-        print(key.shape)
-        print(value.shape)
-        print(key_cache.shape)
-        print(value_cache.shape)
+        # print("write_to_paged_cache 11")
+        # print(key.shape)
+        # print(value.shape)
+        # print(key_cache.shape)
+        # print(value_cache.shape)
         #print(key_cache[-1,  :100])
         # slot_mapping = slot_mapping - 1
-        print(slot_mapping)
-        t = slot_mapping % 16 # ?
-        print(t)
+        # print(slot_mapping)
+        # t = slot_mapping % 16 # ?
+        # print(t)
         # if t[0] == 6 or t[0] == 7:
-        print(value_cache[-15:, -1, -1, :])
-        print("22047_1")
-        print(value_cache[22047, -1, -1, :])
+        #print(value_cache[-15:, -1, -1, :])
+        #print("22047_1")
+        #print(value_cache[22047, -1, -1, :])
         print("slot mapping")
         ops.reshape_and_cache(
             key,
@@ -93,14 +93,14 @@ class PagedAttention:
             kv_cache_dtype,
             kv_scale,
         )
-        print("write_to_paged_cache 2")
+        # print("write_to_paged_cache 2")
         #print(key_cache.shape)
-        print(value_cache.shape)
+        # print(value_cache.shape)
         #print(key_cache[-9:, :100])
         # if t[0] == 6 or t[0] == 7 or t[0] == 4 or t[0] == 5 or t[0] == 3: # ??
-        print(value_cache[-15:, -1, -1, :])
-        print("22047_2")
-        print(value_cache[22047, -1, -1, :])
+        #print(value_cache[-15:, -1, -1, :])
+        #print("22047_2")
+        #print(value_cache[22047, -1, -1, :])
 
     @staticmethod
     def copy_to_paged_cache(
@@ -152,7 +152,9 @@ class PagedAttention:
         use_v1 = (max_seq_len <= 8192
                   and (max_num_partitions == 1 or num_seqs * num_heads > 512))
         if use_v1:
-            print("EEEEEEEEEEEEEEEEEEEEE")
+            # print("EEEEEEEEEEEEEEEEEEEEE")
+            # print(seq_lens)
+            # print(max_seq_len)
             # if sparse_condition is None: # ??
             #     print("ZZZZZZZZZZZZZZZZZZZZZZZZZ")
             #     #sparse_condition = torch.zeros(768, dtype=torch.float32)
@@ -160,10 +162,9 @@ class PagedAttention:
             # else:
             #     print(sparse_condition.shape)
             # Run PagedAttention V1.
-            print(sparse_condition.shape)
-            print(sparse_condition.size(0))
-            print(block_tables.shape)
-            print(seq_lens)
+            # print(sparse_condition.shape)
+            # print(sparse_condition.size(0))
+            # print(block_tables.shape)
             ops.paged_attention_v1(
                 output,
                 query,
@@ -288,31 +289,31 @@ class PagedAttention:
     ) -> None:
         key_caches = [kv_cache[0] for kv_cache in kv_caches]
         value_caches = [kv_cache[1] for kv_cache in kv_caches]
-        print(sparse_condition)
+        # print(sparse_condition)
         # assert sparse_condition is not None
         num_seq = sparse_condition.size(1) # 4 ?
-        print("PPPPPSPRASE")
-        print(src_to_dists)
-        print(src_to_dists[:, 0])
-        print(src_to_dists[:, 1])
-        print(src_to_dists.size(0))
-        print("LENGTH")
-        print(len(key_caches))
-        print(len(value_caches))
-        print(key_caches[0].shape)
-        print(value_caches[0].shape)
+        # print("PPPPPSPRASE")
+        # print(src_to_dists)
+        # print(src_to_dists[:, 0])
+        # print(src_to_dists[:, 1])
+        # print(src_to_dists.size(0))
+        # print("LENGTH")
+        # print(len(key_caches))
+        # print(len(value_caches))
+        # print(key_caches[0].shape)
+        # print(value_caches[0].shape)
         # print("PPPPPSPRASE")
         torch.set_printoptions(threshold=float('inf'))
-        print(sparse_condition)
-        print(sparse_condition.shape)
-        print(sparse_condition.size(1))
-        print("PPPPSPRASE end")
+        # print(sparse_condition)
+        # print(sparse_condition.shape)
+        # print(sparse_condition.size(1))
+        # print("PPPPSPRASE end")
         num_blocks = src_to_dists.size(2)
         print("NNNNNNNUMBLOCKS " + str(num_blocks))
         selection_index_src_tensor = torch.full((len(key_caches), src_to_dists.size(0), block_size * num_blocks), -1, dtype=torch.int64) # src_to_dists.size(0) = 5 ?
         selection_index_dst_tensor = torch.full((len(key_caches), src_to_dists.size(0), block_size * num_blocks), -1, dtype=torch.int64) # src_to_dists.size(0) = 5
-        print(selection_index_src_tensor.shape)
-        print(selection_index_dst_tensor.shape)
+        # print(selection_index_src_tensor.shape)
+        # print(selection_index_dst_tensor.shape)
         for i, row in enumerate(sparse_condition): # 0-3
             for j, value in enumerate(row):
                 count = 0
@@ -331,16 +332,16 @@ class PagedAttention:
         block_mapping_dst = src_to_dists[:, 1].to(torch.int64)
         print(block_mapping_src)
         print(block_mapping_dst)
-        print("debug")
-        print(block_mapping_src.shape)
-        print(block_mapping_dst.shape)
+        # print("debug")
+        # print(block_mapping_src.shape)
+        # print(block_mapping_dst.shape)
         #print(key_caches[0][-5:, :100])
-        print("PagedAttention sparse_cache_copy")
+        # print("PagedAttention sparse_cache_copy")
         #print(value_caches[0][-15:, :100])
-        print(value_caches[0][22041:, :100])
+        # print(value_caches[0][22041:, :100])
         ops.sparse_cache_copy(key_caches, value_caches, block_mapping_src, block_mapping_dst, src_flatten, dst_flatten, num_heads, head_size, block_size)
         #print(key_caches[0][-9:, :100])
-        print("WTFWTFWTFWTFWTF end")
+        # print("WTFWTFWTFWTFWTF end")
         #print(value_caches[0][-15:, :100])
-        print(value_caches[0][22041:, :100])
+        # print(value_caches[0][22041:, :100])
         #gc.collect() ??

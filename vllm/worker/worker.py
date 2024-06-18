@@ -305,10 +305,10 @@ class Worker(WorkerBase):
         if num_seq_groups == 0:
             return []
         
-        print("BEFOREEEE")
+        #print("BEFOREEEE")
         num_requests = len(seq_group_metadata_list)
-        print(num_requests)
-        print(self.sparse_condition)
+        #print(num_requests)
+        #print(self.sparse_condition)
         if num_requests > 100: # ??
             num_requests = 4
         #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
@@ -316,8 +316,8 @@ class Worker(WorkerBase):
 
         output = self.model_runner.execute_model(seq_group_metadata_list,
                                                  self.gpu_cache, sparse_condition=self.sparse_condition)
-        print("AFTERRRRR")
-        print(self.sparse_condition)
+        #print("AFTERRRRR")
+        #print(self.sparse_condition)
 
         # Worker only supports single-step execution. Wrap the output in a list
         # to conform to interface.

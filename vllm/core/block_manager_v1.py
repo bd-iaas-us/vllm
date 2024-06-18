@@ -404,7 +404,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
             ret[0].append(block.block_number)
             print("BBBBCreate " + str(block.block_number))
         # new_block_number = math.ceil(len(seq.logical_token_blocks) * 1.0) # 0.2
-        percentage = 0.5
+        percentage = 1.0
         new_block_number = math.ceil(len(block_table) * percentage) # 0.5 # ?? 0.2 16 * 0.3 = 4.8 ~ 5
         if len(ret) == 1:
             ret.append([])
@@ -451,10 +451,10 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         """Allocate a physical slot for a new token."""
         logical_blocks = seq.logical_token_blocks
         block_table = self.block_tables[seq.seq_id]
-        print("AAAAAAAAAAAAAAPPEND SLOTS " + str(len(block_table)) + ", " + str(len(logical_blocks)))
-        for item in logical_blocks:
-            print(item.block_number)
-        print(block_table)
+        # print("AAAAAAAAAAAAAAPPEND SLOTS " + str(len(block_table)) + ", " + str(len(logical_blocks)))
+        # for item in logical_blocks:
+        #     print(item.block_number)
+        # print(block_table)
         # if len(logical_blocks) > 0:
         #     num_logical_tokens = len(logical_blocks) * 16 - logical_blocks[-1].get_num_empty_slots()
         #     print(num_logical_tokens)
@@ -471,12 +471,12 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         block_size = 0
         if logical_blocks:
             block_size = logical_blocks[0].block_size
-            print(block_size)
-        else:
-            print("WTFWTFWTF")
-        print(seq.data.sparse_last_token_id)
-        if seq.data.sparse_last_token_id == block_size - 1:
-            print("XYZXYZXYZ")
+            # print(block_size)
+        # else:
+        #     print("WTFWTFWTF")
+        # print(seq.data.sparse_last_token_id)
+        # if seq.data.sparse_last_token_id == block_size - 1:
+        #     print("XYZXYZXYZ")
         # If we need to allocate a new physical block
         # if len(block_table) < len(logical_blocks):
             # Currently this code only supports adding one physical block
