@@ -250,7 +250,7 @@ __global__ void sparse_cache_copy_kernel(
     //   value_cache[tgt_value_idx] = tgt_value;
     // } else {
     //   key_cache[tgt_key_idx] = fp8::scaled_convert<cache_t, scalar_t, kv_dt>(tgt_key, kv_scale);
-    //   value_cache[tgt_value_idx] = fp8::scaled_convert<cache_t, scalar_t, kv_dt>(tgt_value, kv_scale);
+    //   value_cache[tgt_value_idx] = fp8::scaled_convert<cache_t, scalar_t, kv_dt>(tgt_value, kv_scale); ??
     // }
   }
 }
@@ -283,7 +283,7 @@ void sparse_cache_copy(
   //const int num_heads = 12;
   //const int head_size = 64;
   //const int block_size = 16;
-  const int x = 8; // constexpr int x = 16 / sizeof(cache_t);
+  const int x = 8; // constexpr int x = 16 / sizeof(cache_t); x = 16 // kv_cache.element_size() ??
   
   // int x = key_cache.size(4);
   // int block_mapping_dst_number = static_cast<int64_t>(block_mapping_dst.size());

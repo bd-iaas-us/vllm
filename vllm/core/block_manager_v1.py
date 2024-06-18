@@ -392,7 +392,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         return new_block
 
     # Add a new block manager method "create_new_slots" similar to append_slots but to create new KV cache slots, rather than append_slots.
-    def create_new_slots(self, seq: Sequence) -> Tuple[List[List[int]], List[int]]:
+    def create_new_slots(self, seq: Sequence, percentage: float) -> Tuple[List[List[int]], List[int]]:
         # go through the block_table to see if block.ref_count == 1
         # if 1, self.gpu_allocator.free(block) to free the block
         # List[List[int]]
@@ -404,7 +404,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
             ret[0].append(block.block_number)
             print("BBBBCreate " + str(block.block_number))
         # new_block_number = math.ceil(len(seq.logical_token_blocks) * 1.0) # 0.2
-        percentage = 1.0
+        # percentage = 0.5
         new_block_number = math.ceil(len(block_table) * percentage) # 0.5 # ?? 0.2 16 * 0.3 = 4.8 ~ 5
         if len(ret) == 1:
             ret.append([])

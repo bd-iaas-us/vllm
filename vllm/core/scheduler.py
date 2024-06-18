@@ -1084,11 +1084,12 @@ class Scheduler:
             sparse_cows: List[List[int]] = []
             cows = self.block_manager.append_slots(seq, num_lookahead_slots)
             blocks_to_copy.extend(cows)
-            step = 20 # ??
-            if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % step == 0:
+            # step = 20 # ??
+            # percentage = 0.5
+            if self.cache_config.sparse_cache_type == "h2o" and seq_group.n_times % self.cache_config.sparse_interval == 0:
                 # if not blocks_to_sparse_copy:
                 #     blocks_to_sparse_copy.extend([[],[]])
-                sparse_cows, free_block = self.block_manager.create_new_slots(seq)
+                sparse_cows, free_block = self.block_manager.create_new_slots(seq, self.cache_config.sparse_percentage)
                 free_blocks.extend(free_block)
                 # blocks_to_sparse_copy[0].extend(sparse_cows[0])
                 # blocks_to_sparse_copy[1].extend(sparse_cows[1])

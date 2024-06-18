@@ -309,8 +309,8 @@ class Worker(WorkerBase):
         num_requests = len(seq_group_metadata_list)
         #print(num_requests)
         #print(self.sparse_condition)
-        if num_requests > 100: # ??
-            num_requests = 4
+        # if num_requests > 100: # ???
+        #     num_requests = 4
         #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size), dtype=torch.int64)
         #self.sparse_condition = torch.zeros((self.cache_engine.num_layers, num_requests, self.cache_engine.block_size * 7), dtype=torch.int64) # ??
 

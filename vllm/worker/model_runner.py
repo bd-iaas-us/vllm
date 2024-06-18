@@ -504,8 +504,10 @@ class ModelRunner:
                 #         temp = math.floor(temp * percentage)
                 #     kv_cache_pos = temp + n_times % step
                 if self.cache_config.sparse_cache_type == "h2o" and n_times >= 0:
-                    percentage = 1.0 # 0.5 # ??
-                    step = 20 # ??
+                    # step = 20 # ??
+                    # percentage = 0.5 # 0.5 # ??
+                    step = self.cache_config.sparse_interval
+                    percentage = self.cache_config.sparse_percentage
                     times = n_times // step
                     temp = position - n_times
                     temp = math.floor(temp * percentage) 
@@ -907,9 +909,11 @@ class ModelRunner:
             "kv_caches": kv_caches,
             "attn_metadata": attn_metadata,
             "sparse_condition": None,
+            "sparse_type": None,
         }
         if self.cache_config.sparse_cache_type != 'auto' and sparse_condition is not None:
             execute_model_kwargs["sparse_condition"] = sparse_condition[0]
+            execute_model_kwargs["sparse_type"] = (self.cache_config.sparse_cache_type, self.cache_config.sparse_interval, self.cache_config.sparse_percentage)
         # print("input_positions shape")
         # print(input_positions.shape)
         # print(input_positions)

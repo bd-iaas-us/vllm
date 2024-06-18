@@ -252,6 +252,7 @@ class OPTDecoder(nn.Module):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         sparse_condition: Optional[torch.Tensor],
+        sparse_type: Optional[Tuple], # sparse_cache_type, sparse_interval, sparse_percentage
     ) -> torch.Tensor:
         # print("OPTDecoder forward start")
         # print(attn_metadata.slot_mapping.shape)
@@ -298,12 +299,13 @@ class OPTDecoder(nn.Module):
         seq_size = 0  # 4
         if attn_metadata:
             seq_size = attn_metadata.num_decode_tokens + attn_metadata.num_prefills
-        # ??
-        if seq_size == 256:
-            seq_size = 4
+        # ???
+        # if seq_size == 256:
+        #     seq_size = 4
 
         head_size = self.config.num_attention_heads # 12 ?
-        percentage = 1.0 # 0.5 # ??
+        # step = 20 # ??
+        # percentage = 0.5 # 0.5 # ??
 
         # sparse_condition_size = len(self.layers) * seq_size * block_size
         # if sparse_condition is None: # ??
@@ -347,63 +349,63 @@ class OPTDecoder(nn.Module):
             # print(i)
             # print(positions)
             # print(sparse_condition)
-            for j in range(seq_size):
-                num_to_select = math.ceil(block_dimensions * percentage) # ????
-                # 1. sparse condition continue for multiple rounds
-                n_times = self.n_times
-                # print("NTNTNT" + str(n_times))
-                # print(sparse_condition)
-                if n_times >= 0:
-                    percentage = 1.0 # 0.5 # ??
-                    step = 20 # ??
-                    times = n_times // step
-                    temp = positions[j] + 1 - n_times # after inserting one token
-                    temp = math.floor(temp * percentage)
-                    for _ in range(times):
-                        temp += step
-                        temp = math.floor(temp * percentage)
-                    num_to_select = temp + n_times % step
-                # print("NUMBERNUMBER" + str(num_to_select))
-                # print(sparse_condition)
-                # print("RRRRNUMBERNUMBER")
-                if num_to_select <= 0 or layer_sparse_condition_2d[j].size(0) == 0:
-                    continue
-                # print(layer_sparse_condition_2d[j].shape)
-                #print(layer_sparse_condition_2d[j])
-                # print(num_to_select-1)
-                _, top_indices = torch.topk(torch.abs(layer_sparse_condition_2d[j][1:]), num_to_select-1) #?? absolute value
-                # print(sparse_condition)
-                # print(top_indices)
-                is_all_zero = torch.all(layer_sparse_condition_2d[j] == 0)
-                # print("ALL zero")
-                if is_all_zero: # prefill case ??
-                    temp_length = find_increasing_subsequences_lengths(positions)
-                    # print("TTTTTTTT")
-                    # print(temp_length)
-                    # print("zzzzzero")
-                    # print(j)
-                    # print(len(temp_length))
-                    #num_to_select = math.floor(temp_length[j] * percentage)
-                    num_to_select = temp_length[j]
-                    print(num_to_select)
-                    top_indices = [i for i in range(num_to_select)]
-                # print(num_to_select)
-                # print(top_indices)
-                # print("IIIIIIIIIIIIIIIIIIIIIIIIIII:" + str(i))
-                # print(top_indices)
-                # print(block_dimensions)
-                # print(sparse_condition)
-                for k in range(block_dimensions):
-                    if k == 0: # starting token
-                        # print(i)
+            if sparse_type is not None:
+                for j in range(seq_size):
+                    num_to_select = math.ceil(block_dimensions * sparse_type[2]) # ????
+                    # 1. sparse condition continue for multiple rounds
+                    n_times = self.n_times
+                    # print("NTNTNT" + str(n_times))
+                    # print(sparse_condition)
+                    assert sparse_type[1] != 0
+                    if n_times >= 0:
+                        times = n_times // sparse_type[1]
+                        temp = positions[j] + 1 - n_times # after inserting one token
+                        temp = math.floor(temp * sparse_type[2])
+                        for _ in range(times):
+                            temp += sparse_type[1]
+                            temp = math.floor(temp * sparse_type[2])
+                        num_to_select = temp + n_times % sparse_type[1]
+                    # print("NUMBERNUMBER" + str(num_to_select))
+                    # print(sparse_condition)
+                    # print("RRRRNUMBERNUMBER")
+                    if num_to_select <= 0 or layer_sparse_condition_2d[j].size(0) == 0:
+                        continue
+                    # print(layer_sparse_condition_2d[j].shape)
+                    #print(layer_sparse_condition_2d[j])
+                    # print(num_to_select-1)
+                    _, top_indices = torch.topk(torch.abs(layer_sparse_condition_2d[j][1:]), num_to_select-1) #?? absolute value
+                    # print(sparse_condition)
+                    # print(top_indices)
+                    is_all_zero = torch.all(layer_sparse_condition_2d[j] == 0)
+                    # print("ALL zero")
+                    if is_all_zero: # prefill case ??
+                        temp_length = find_increasing_subsequences_lengths(positions)
+                        # print("TTTTTTTT")
+                        # print(temp_length)
+                        # print("zzzzzero")
                         # print(j)
-                        # print(k)
-                        sparse_condition[i, j, k] = 1
-                    if k in top_indices:
-                        # print("KKKK " + str(k))
-                        sparse_condition[i, j, k] = 1
-                    # else:
-                    #     sparse_condition[i, j, k] = 0
+                        # print(len(temp_length))
+                        #num_to_select = math.floor(temp_length[j] * percentage)
+                        num_to_select = temp_length[j]
+                        print(num_to_select)
+                        top_indices = [i for i in range(num_to_select)]
+                    # print(num_to_select)
+                    # print(top_indices)
+                    # print("IIIIIIIIIIIIIIIIIIIIIIIIIII:" + str(i))
+                    # print(top_indices)
+                    # print(block_dimensions)
+                    # print(sparse_condition)
+                    for k in range(block_dimensions):
+                        if k == 0: # starting token
+                            # print(i)
+                            # print(j)
+                            # print(k)
+                            sparse_condition[i, j, k] = 1
+                        if k in top_indices:
+                            # print("KKKK " + str(k))
+                            sparse_condition[i, j, k] = 1
+                        # else:
+                        #     sparse_condition[i, j, k] = 0
                 
         #print("WTF man")
         # print(sparse_condition)
@@ -433,6 +435,7 @@ class OPTModel(nn.Module):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         sparse_condition: Optional[torch.Tensor],
+        sparse_type: Optional[Tuple],
     ) -> torch.Tensor:
         # print("OPT Model")
         # print(sparse_condition)
@@ -440,7 +443,7 @@ class OPTModel(nn.Module):
         #     print("YYYYYYYYYYYYYY")
         #     sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64)
         #     #sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
-        t = self.decoder(input_ids, positions, kv_caches, attn_metadata, sparse_condition)
+        t = self.decoder(input_ids, positions, kv_caches, attn_metadata, sparse_condition, sparse_type)
         # print("OPT Model done")
         # print(sparse_condition)
         return t
@@ -468,13 +471,14 @@ class OPTForCausalLM(nn.Module):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         sparse_condition: Optional[torch.Tensor],
+        sparse_type: Optional[Tuple],
     ) -> torch.Tensor:
         # if sparse_condition is None:
         #     print("XXXXXXXXXXXXXXXXXXX")
         #     #sparse_condition = torch.zeros((12, 4, 16), dtype=torch.int64)
         #     sparse_condition = torch.zeros((12, 4, 16 * 3), dtype=torch.int64) #??
         hidden_states = self.model(input_ids, positions, kv_caches,
-                                   attn_metadata, sparse_condition)
+                                   attn_metadata, sparse_condition, sparse_type)
         return hidden_states
 
     def compute_logits(self, hidden_states: torch.Tensor,

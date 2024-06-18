@@ -353,9 +353,9 @@ class CacheConfig:
         self.swap_space_bytes = swap_space * _GB
         self.num_gpu_blocks_override = num_gpu_blocks_override
         self.cache_dtype = cache_dtype
-        self.sparse_cache_type = sparse_cache_type
         self.sliding_window = sliding_window
         self.enable_prefix_caching = enable_prefix_caching
+        self.sparse_cache_type = sparse_cache_type
         self._verify_args()
         self._verify_cache_dtype()
         self._verify_sparse_cache_type()
@@ -393,6 +393,8 @@ class CacheConfig:
         if self.sparse_cache_type == "auto":
             pass
         elif self.sparse_cache_type == "h2o":
+            self.sparse_percentage = 0.5 # ???
+            self.sparse_interval = 20
             logger.info(
                 "Using h2o for supporting sparse KV cache. It reduces the GPU "
                 "memory footprint and boosts the performance.")
