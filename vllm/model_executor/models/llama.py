@@ -61,17 +61,21 @@ class LlamaMLP(nn.Module):
         hidden_act: str,
         quant_config: Optional[QuantizationConfig] = None,
         bias: bool = False,
+        cache_config: Optional[CacheConfig] = None,
     ) -> None:
         super().__init__()
+        cpu_offload_weight= False if cache_config is None else cache_config.cpu_offload_weight
         self.gate_up_proj = MergedColumnParallelLinear(
             input_size=hidden_size,
             output_sizes=[intermediate_size] * 2,
             bias=bias,
-            quant_config=quant_config)
+            quant_config=quant_config,
+            cpu_offload_weight= cpu_offload_weight)
         self.down_proj = RowParallelLinear(input_size=intermediate_size,
                                            output_size=hidden_size,
                                            bias=bias,
-                                           quant_config=quant_config)
+                                           quant_config=quant_config,
+                                           cpu_offload_weight= cpu_offload_weight)
         if hidden_act != "silu":
             raise ValueError(f"Unsupported activation: {hidden_act}. "
                              "Only silu is supported for now.")
@@ -120,7 +124,7 @@ class LlamaAttention(nn.Module):
         self.scaling = self.head_dim**-0.5
         self.rope_theta = rope_theta
         self.max_position_embeddings = max_position_embeddings
-
+        cpu_offload_weight= False if cache_config is None else cache_config.cpu_offload_weight
         self.qkv_proj = QKVParallelLinear(
             hidden_size=hidden_size,
             head_size=self.head_dim,
@@ -128,12 +132,14 @@ class LlamaAttention(nn.Module):
             total_num_kv_heads=self.total_num_kv_heads,
             bias=bias,
             quant_config=quant_config,
+            cpu_offload_weight= cpu_offload_weight
         )
         self.o_proj = RowParallelLinear(
             input_size=self.total_num_heads * self.head_dim,
             output_size=hidden_size,
             bias=bias,
             quant_config=quant_config,
+            cpu_offload_weight= cpu_offload_weight
         )
 
         self.rotary_emb = get_rope(
@@ -205,6 +211,7 @@ class LlamaDecoderLayer(nn.Module):
             hidden_act=config.hidden_act,
             quant_config=quant_config,
             bias=getattr(config, "mlp_bias", False),
+            cache_config=cache_config,
         )
         self.input_layernorm = RMSNorm(config.hidden_size,
                                        eps=config.rms_norm_eps)
@@ -402,6 +409,7 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA):
         ]
         params_dict = dict(self.named_parameters())
         for name, loaded_weight in weights:
+            print(f"Loading weight :------ {name} shape: {loaded_weight.shape}")
             if "rotary_emb.inv_freq" in name:
                 continue
             if ("rotary_emb.cos_cached" in name

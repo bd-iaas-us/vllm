@@ -47,6 +47,7 @@ class Worker(LocalOrDistributedWorkerBase):
         speculative_config: Optional[SpeculativeConfig] = None,
         is_driver_worker: bool = False,
         model_runner_cls: Optional[Type[GPUModelRunnerBase]] = None,
+        cpu_offload_weight: bool=False,
     ) -> None:
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -213,7 +214,8 @@ class Worker(LocalOrDistributedWorkerBase):
         self.cache_config.num_cpu_blocks = num_cpu_blocks
 
         self._init_cache_engine()
-        self._warm_up_model()
+        if self.cache_config.cpu_offload_weight == False:
+            self._warm_up_model()
 
     def _init_cache_engine(self):
         assert self.cache_config.num_gpu_blocks is not None

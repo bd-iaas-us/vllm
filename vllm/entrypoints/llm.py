@@ -84,6 +84,7 @@ class LLM:
     Note:
         This class is intended to be used for offline inference. For online
         serving, use the :class:`~vllm.AsyncLLMEngine` class instead.
+        cpu_offload_weight: Whether to offload the model weights to CPU memory.
     """
 
     DEPRECATE_LEGACY: ClassVar[bool] = False
@@ -117,6 +118,7 @@ class LLM:
         max_context_len_to_capture: Optional[int] = None,
         max_seq_len_to_capture: int = 8192,
         disable_custom_all_reduce: bool = False,
+        cpu_offload_weight: bool = False,
         **kwargs,
     ) -> None:
         if "disable_log_stats" not in kwargs:
@@ -139,6 +141,7 @@ class LLM:
             max_context_len_to_capture=max_context_len_to_capture,
             max_seq_len_to_capture=max_seq_len_to_capture,
             disable_custom_all_reduce=disable_custom_all_reduce,
+            cpu_offload_weight = cpu_offload_weight,
             **kwargs,
         )
         self.llm_engine = LLMEngine.from_engine_args(

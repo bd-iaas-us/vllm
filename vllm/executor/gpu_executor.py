@@ -46,6 +46,7 @@ class GPUExecutor(ExecutorBase):
             vision_language_config=self.vision_language_config,
             speculative_config=self.speculative_config,
             is_driver_worker=rank == 0,
+            cpu_offload_weight=self.cache_config.cpu_offload_weight,
         )
 
     def _create_worker(self,

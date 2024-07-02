@@ -160,6 +160,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         is_driver_worker: bool = False,
         vision_language_config: Optional[VisionLanguageConfig] = None,
         return_hidden_states: bool = False,
+        cpu_offload_weight: Optional[bool] = False,
     ):
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -171,6 +172,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         self.is_driver_worker = is_driver_worker
         self.vision_language_config = vision_language_config
         self.return_hidden_states = return_hidden_states
+        self.cpu_offload_weight = cpu_offload_weight
 
         self.device = self.device_config.device
         self.pin_memory = is_pin_memory_available()
@@ -228,6 +230,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
                 parallel_config=self.parallel_config,
                 scheduler_config=self.scheduler_config,
                 cache_config=self.cache_config,
+                #cpu_offload_weight=self.cpu_offload_weight,
             )
 
         self.model_memory_usage = m.consumed_memory
@@ -1124,7 +1127,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         assert model_input.attn_metadata is not None
         prefill_meta = model_input.attn_metadata.prefill_metadata
         decode_meta = model_input.attn_metadata.decode_metadata
-        if prefill_meta is None and decode_meta.use_cuda_graph:
+        if prefill_meta is None and decode_meta.use_cuda_graph and self.cache_config.cpu_offload_weight is False:
             assert model_input.input_tokens is not None
             graph_batch_size = model_input.input_tokens.shape[0]
             model_executable = self.graph_runners[graph_batch_size]

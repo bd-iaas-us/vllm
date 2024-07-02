@@ -106,6 +106,7 @@ class EngineArgs:
     qlora_adapter_name_or_path: Optional[str] = None
 
     otlp_traces_endpoint: Optional[str] = None
+    cpu_offload_weight: bool = False
 
     def __post_init__(self):
         if self.tokenizer is None:
@@ -652,6 +653,11 @@ class EngineArgs:
             default=None,
             help='Target URL to which OpenTelemetry traces will be sent.')
 
+        parser.add_argument('--cpu-offload-weight',
+                            action='store_true',
+                            default=EngineArgs.cpu_offload_weight,
+                            help='Whether to offload the model weights to CPU '
+                            'memory.')
         return parser
 
     @classmethod
@@ -741,7 +747,8 @@ class EngineArgs:
             cache_dtype=self.kv_cache_dtype,
             num_gpu_blocks_override=self.num_gpu_blocks_override,
             sliding_window=model_config.get_sliding_window(),
-            enable_prefix_caching=self.enable_prefix_caching)
+            enable_prefix_caching=self.enable_prefix_caching,
+            cpu_offload_weight=self.cpu_offload_weight)
         parallel_config = ParallelConfig(
             pipeline_parallel_size=self.pipeline_parallel_size,
             tensor_parallel_size=self.tensor_parallel_size,
