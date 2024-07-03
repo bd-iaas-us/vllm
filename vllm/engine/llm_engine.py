@@ -814,6 +814,9 @@ class LLMEngine:
         """
         seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
 
+        import time
+        start = time.time()
+
         if not scheduler_outputs.is_empty():
             execute_model_req = ExecuteModelRequest(
                 seq_group_metadata_list=seq_group_metadata_list,
@@ -831,6 +834,9 @@ class LLMEngine:
         request_outputs = self._process_model_outputs(
             output, scheduler_outputs.scheduled_seq_groups,
             scheduler_outputs.ignored_seq_groups, seq_group_metadata_list)
+
+        time_cost = time.time() - start
+        # print(f"time_track ===== : LLM Engine step  {time_cost}")
 
         # Log stats.
         self.do_log_stats(scheduler_outputs, output)

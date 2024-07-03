@@ -267,6 +267,10 @@ class DefaultModelLoader(BaseModelLoader):
                 model = _initialize_model(model_config, self.load_config,
                                           lora_config, vision_language_config,
                                           cache_config)
+            import time
+
+            start = time.time()
+
             model.load_weights(
                 self._get_weights_iterator(model_config.model,
                                            model_config.revision,
@@ -274,6 +278,8 @@ class DefaultModelLoader(BaseModelLoader):
                                                model,
                                                "fall_back_to_pt_during_load",
                                                True)), )
+            time_cost = time.time() - start
+            print(f"time_track ===== : load_weights  {time_cost}")
 
             for _, module in model.named_modules():
                 quant_method = getattr(module, "quant_method", None)

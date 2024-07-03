@@ -11,7 +11,7 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 from vllm.model_executor.layers.quantization.fp8 import Fp8KVCacheMethod
 
-
+total_attention_time = 0
 class Attention(nn.Module):
     """Attention layer.
 
@@ -91,8 +91,18 @@ class Attention(nn.Module):
         kv_cache: Optional[torch.Tensor],
         attn_metadata: AttentionMetadata,
     ) -> torch.Tensor:
-        return self.impl.forward(query, key, value, kv_cache, attn_metadata,
+        import time
+        start = time.time()
+
+        result = self.impl.forward(query, key, value, kv_cache, attn_metadata,
                                  self._kv_scale)
+        
+        time_cost = time.time() - start
+        global total_attention_time
+        total_attention_time += time_cost
+        #print(f"time_track ===== : attention  {time_cost}, total: {total_attention_time} ")
+
+        return result
 
     def extra_repr(self) -> str:
         s = f"head_size={self.impl.head_size}"  # type: ignore

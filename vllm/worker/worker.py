@@ -214,8 +214,8 @@ class Worker(LocalOrDistributedWorkerBase):
         self.cache_config.num_cpu_blocks = num_cpu_blocks
 
         self._init_cache_engine()
-        if self.cache_config.cpu_offload_weight == False:
-            self._warm_up_model()
+        # if self.cache_config.cpu_offload_weight == False:
+        #     self._warm_up_model()
 
     def _init_cache_engine(self):
         assert self.cache_config.num_gpu_blocks is not None

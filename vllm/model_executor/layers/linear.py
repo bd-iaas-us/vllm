@@ -17,6 +17,8 @@ from vllm.model_executor.utils import set_weight_attrs
 
 logger = init_logger(__name__)
 
+overall_weight_move = 0 
+overall_matrix_compute = 0
 
 def adjust_marlin_shard(param, shard_size, shard_offset):
     marlin_tile_size = getattr(param, "marlin_tile_size", None)
@@ -136,17 +138,34 @@ class UnquantizedLinearMethod(LinearMethodBase):
               layer: torch.nn.Module,
               x: torch.Tensor,
               bias: Optional[torch.Tensor] = None) -> torch.Tensor:
+        import time
+        start = time.time()
+
         weight = layer.weight
         if weight.device != x.device:
             old_weight_device = weight.device
             weight = weight.to(x.device)
+
+        time_cost = time.time() - start
+        global overall_weight_move
+        overall_weight_move += time_cost
+        print(f"time_track ===== : move weight to cpu  {time_cost}, total: {overall_weight_move} ") 
+
+        start = time.time()
 
         if self.separate_bias_add:
             if bias is not None:
                 return F.linear(x, weight) + bias
             return F.linear(x, weight)
 
-        return F.linear(x, weight, bias)
+        result = F.linear(x, weight, bias)
+
+        time_cost = time.time() - start
+        global overall_matrix_compute
+        overall_matrix_compute += time_cost
+        print(f"time_track ===== : matrix multiplication  {time_cost}, total: {overall_matrix_compute} ") 
+
+        return result
 
 
 class LinearBase(torch.nn.Module):

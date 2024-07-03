@@ -303,8 +303,13 @@ class LLM:
             params=sampling_params,
             lora_request=lora_request,
         )
+        import time
+        start = time.time()
 
         outputs = self._run_engine(use_tqdm=use_tqdm)
+
+        time_cost = time.time() - start
+        print(f"time_track ===== : Run inference engine  {time_cost}")
         return LLMEngine.validate_outputs(outputs, RequestOutput)
 
     @overload  # LEGACY: single (prompt + optional token ids)

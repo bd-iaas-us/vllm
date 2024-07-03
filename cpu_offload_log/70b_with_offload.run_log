@@ -1,0 +1,11 @@
+INFO 07-03 01:30:37 llm_engine.py:169] Initializing an LLM engine (v0.5.0.post1) with config: model='meta-llama/Llama-2-70b-hf', speculative_config=None, tokenizer='meta-llama/Llama-2-70b-hf', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None), seed=0, served_model_name=meta-llama/Llama-2-70b-hf)
+INFO 07-03 01:30:40 weight_utils.py:218] Using model weights format ['*.safetensors']
+time_track ===== : load_weights  1105.5606799125671
+INFO 07-03 01:49:05 model_runner.py:237] Loading model weights took 0.9800 GB
+INFO 07-03 01:49:25 gpu_executor.py:84] # GPU blocks: 3468, # CPU blocks: 819
+time_track ===== : Run inference engine  172.8852813243866
+Prompt: 'Hello, my name is', Generated text: ' Geoffrey and I am a successful and happy member of the Gnominati'
+Prompt: 'The president of the United States is', Generated text: ' the head of state and head of government of the United States of America. The'
+Prompt: 'The capital of France is', Generated text: ' the largest city in the country and one of the most important European centers.'
+Prompt: 'The future of AI is', Generated text: ' human\nAI is a tool, not a replacement.\nThe future of A'
+time_track ===== : end-to-end time cost  1304.7328431606293

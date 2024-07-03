@@ -1084,6 +1084,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         kv_caches: List[torch.Tensor],
         num_steps: int = 1,
     ) -> Optional[List[SamplerOutput]]:
+        import time
+        start = time.time()
         if num_steps > 1:
             raise ValueError("num_steps > 1 is not supported in ModelRunner")
 
@@ -1127,12 +1129,12 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         assert model_input.attn_metadata is not None
         prefill_meta = model_input.attn_metadata.prefill_metadata
         decode_meta = model_input.attn_metadata.decode_metadata
-        if prefill_meta is None and decode_meta.use_cuda_graph and self.cache_config.cpu_offload_weight is False:
-            assert model_input.input_tokens is not None
-            graph_batch_size = model_input.input_tokens.shape[0]
-            model_executable = self.graph_runners[graph_batch_size]
-        else:
-            model_executable = self.model
+        # if prefill_meta is None and decode_meta.use_cuda_graph and self.cache_config.cpu_offload_weight is False:
+        #     assert model_input.input_tokens is not None
+        #     graph_batch_size = model_input.input_tokens.shape[0]
+        #     model_executable = self.graph_runners[graph_batch_size]
+        # else:
+        model_executable = self.model
 
         multi_modal_kwargs = model_input.multi_modal_kwargs or {}
         hidden_states = model_executable(
@@ -1168,6 +1170,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
             output.hidden_states = hidden_states
 
+        time_cost = time.time() - start
+        #print(f"time_track ===== : execute_model:  {time_cost}")
         return [output]
 
 

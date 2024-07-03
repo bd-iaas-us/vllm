@@ -9,6 +9,7 @@ from vllm.attention.ops.prefix_prefill import context_attention_fwd
 # Should be the same as PARTITION_SIZE in `paged_attention_v2_launcher`.
 _PARTITION_SIZE = 512
 
+page_attention_time = 0
 
 @dataclass
 class PagedAttentionMetadata:
@@ -68,6 +69,8 @@ class PagedAttention:
         kv_cache_dtype: str,
         kv_scale: float,
     ) -> None:
+        import time
+        start = time.time()
         ops.reshape_and_cache(
             key,
             value,
@@ -77,6 +80,8 @@ class PagedAttention:
             kv_cache_dtype,
             kv_scale,
         )
+        time_cost = time.time() - start
+        #print(f"time_track ===== : 1--------  {time_cost}")
 
     @staticmethod
     def forward_decode(
@@ -97,6 +102,8 @@ class PagedAttention:
         blocksparse_block_size: int = 64,
         blocksparse_head_sliding_step: int = 0,
     ) -> torch.Tensor:
+        import time
+        start = time.time()
         if blocksparse_vert_stride is not None and blocksparse_vert_stride > 1:
             # use blocksparse paged attention
             block_size = value_cache.size(-1)
@@ -179,6 +186,12 @@ class PagedAttention:
                 blocksparse_block_size,
                 blocksparse_head_sliding_step,
             )
+
+        time_cost = time.time() - start
+        global page_attention_time
+        page_attention_time += time_cost
+        print(f" : page_attention  {time_cost}, total: {page_attention_time}")
+
         return output
 
     @staticmethod
