@@ -1,0 +1,11 @@
+INFO 07-03 04:41:07 config.py:658] Defaulting to use mp for distributed inference
+INFO 07-03 04:41:07 llm_engine.py:169] Initializing an LLM engine (v0.5.0.post1) with config: model='meta-llama/Llama-2-70b-hf', speculative_config=None, tokenizer='meta-llama/Llama-2-70b-hf', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=2, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None), seed=0, served_model_name=meta-llama/Llama-2-70b-hf)
+[1;36m(VllmWorkerProcess pid=6286)[0;0m INFO 07-03 04:41:08 multiproc_worker_utils.py:215] Worker ready; awaiting tasks
+[1;36m(VllmWorkerProcess pid=6286)[0;0m INFO 07-03 04:41:08 utils.py:719] Found nccl from library libnccl.so.2
+INFO 07-03 04:41:08 utils.py:719] Found nccl from library libnccl.so.2
+[1;36m(VllmWorkerProcess pid=6286)[0;0m INFO 07-03 04:41:08 pynccl.py:63] vLLM is using nccl==2.20.5
+INFO 07-03 04:41:08 pynccl.py:63] vLLM is using nccl==2.20.5
+INFO 07-03 04:41:09 custom_all_reduce_utils.py:232] reading GPU P2P access cache from /home/ubuntu/.config/vllm/gpu_p2p_access_cache_for_0,1.json
+[1;36m(VllmWorkerProcess pid=6286)[0;0m INFO 07-03 04:41:09 custom_all_reduce_utils.py:232] reading GPU P2P access cache from /home/ubuntu/.config/vllm/gpu_p2p_access_cache_for_0,1.json
+WARNING 07-03 04:41:09 custom_all_reduce.py:127] Custom allreduce is disabled because your platform lacks GPU P2P capability or P2P test failed. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+[1;36m(VllmWorkerProcess pid=6286)[0;0m WARNING 07-03 04:41:09 custom_all_reduce.py:127] Custom allreduce is disabled because your platform lacks GPU P2P capability or P2P test failed. To silence this warning, specify disable_custom_all_reduce=True explicitly.

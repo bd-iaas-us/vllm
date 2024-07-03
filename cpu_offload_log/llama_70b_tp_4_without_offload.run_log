@@ -1,0 +1,61 @@
+INFO 07-03 04:41:26 config.py:658] Defaulting to use mp for distributed inference
+INFO 07-03 04:41:26 llm_engine.py:169] Initializing an LLM engine (v0.5.0.post1) with config: model='meta-llama/Llama-2-70b-hf', speculative_config=None, tokenizer='meta-llama/Llama-2-70b-hf', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=4, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None), seed=0, served_model_name=meta-llama/Llama-2-70b-hf)
+[1;36m(VllmWorkerProcess pid=6460)[0;0m INFO 07-03 04:41:27 multiproc_worker_utils.py:215] Worker ready; awaiting tasks
+[1;36m(VllmWorkerProcess pid=6463)[0;0m INFO 07-03 04:41:27 multiproc_worker_utils.py:215] Worker ready; awaiting tasks
+[1;36m(VllmWorkerProcess pid=6464)[0;0m INFO 07-03 04:41:27 multiproc_worker_utils.py:215] Worker ready; awaiting tasks
+INFO 07-03 04:41:28 utils.py:719] Found nccl from library libnccl.so.2
+[1;36m(VllmWorkerProcess pid=6463)[0;0m INFO 07-03 04:41:28 utils.py:719] Found nccl from library libnccl.so.2
+[1;36m(VllmWorkerProcess pid=6460)[0;0m INFO 07-03 04:41:28 utils.py:719] Found nccl from library libnccl.so.2
+[1;36m(VllmWorkerProcess pid=6463)[0;0m INFO 07-03 04:41:28 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=6460)[0;0m INFO 07-03 04:41:28 pynccl.py:63] vLLM is using nccl==2.20.5
+INFO 07-03 04:41:28 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=6464)[0;0m INFO 07-03 04:41:28 utils.py:719] Found nccl from library libnccl.so.2
+[1;36m(VllmWorkerProcess pid=6464)[0;0m INFO 07-03 04:41:28 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=6463)[0;0m WARNING 07-03 04:41:28 custom_all_reduce.py:118] Custom allreduce is disabled because it's not supported on more than two PCIe-only GPUs. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+[1;36m(VllmWorkerProcess pid=6464)[0;0m WARNING 07-03 04:41:28 custom_all_reduce.py:118] Custom allreduce is disabled because it's not supported on more than two PCIe-only GPUs. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+[1;36m(VllmWorkerProcess pid=6460)[0;0m WARNING 07-03 04:41:28 custom_all_reduce.py:118] Custom allreduce is disabled because it's not supported on more than two PCIe-only GPUs. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+WARNING 07-03 04:41:28 custom_all_reduce.py:118] Custom allreduce is disabled because it's not supported on more than two PCIe-only GPUs. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226] Exception in worker VllmWorkerProcess while processing method load_model: CUDA out of memory. Tried to allocate 112.00 MiB. GPU  has a total capacity of 21.99 GiB of which 53.38 MiB is free. Including non-PyTorch memory, this process has 21.93 GiB memory in use. Of the allocated memory 21.53 GiB is allocated by PyTorch, and 1.34 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables), Traceback (most recent call last):
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/executor/multiproc_worker_utils.py", line 223, in _run_worker_process
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     output = executor(*args, **kwargs)
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]              ^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/worker/worker.py", line 136, in load_model
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     self.model_runner.load_model()
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/worker/model_runner.py", line 224, in load_model
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     self.model = get_model(
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]                  ^^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/model_loader/__init__.py", line 21, in get_model
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     return loader.load_model(model_config=model_config,
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/model_loader/loader.py", line 267, in load_model
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     model = _initialize_model(model_config, self.load_config,
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/model_loader/loader.py", line 104, in _initialize_model
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     return model_class(config=model_config.hf_config,
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/models/llama.py", line 352, in __init__
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     self.model = LlamaModel(config,
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]                  ^^^^^^^^^^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/models/llama.py", line 271, in __init__
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     self.layers = nn.ModuleList([
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]                                 ^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/models/llama.py", line 272, in <listcomp>
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     LlamaDecoderLayer(config=config,
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/models/llama.py", line 208, in __init__
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     self.mlp = LlamaMLP(
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]                ^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/models/llama.py", line 74, in __init__
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     self.down_proj = RowParallelLinear(input_size=intermediate_size,
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/layers/linear.py", line 750, in __init__
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     self.quant_method.create_weights(
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/home/ubuntu/qian/git/vllm/vllm/model_executor/layers/linear.py", line 128, in create_weights
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     weight = Parameter(torch.empty(sum(output_partition_sizes),
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]   File "/opt/conda/envs/qian/lib/python3.11/site-packages/torch/utils/_device.py", line 78, in __torch_function__
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]     return func(*args, **kwargs)
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226]            ^^^^^^^^^^^^^^^^^^^^^
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226] torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 112.00 MiB. GPU  has a total capacity of 21.99 GiB of which 53.38 MiB is free. Including non-PyTorch memory, this process has 21.93 GiB memory in use. Of the allocated memory 21.53 GiB is allocated by PyTorch, and 1.34 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[1;36m(VllmWorkerProcess pid=6464)[0;0m ERROR 07-03 04:41:28 multiproc_worker_utils.py:226] 
+ERROR 07-03 04:41:29 multiproc_worker_utils.py:120] Worker VllmWorkerProcess pid 6464 died, exit code: -15
+INFO 07-03 04:41:29 multiproc_worker_utils.py:123] Killing local vLLM worker processes

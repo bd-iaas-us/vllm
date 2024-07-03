@@ -15,9 +15,10 @@ sampling_params = SamplingParams(temperature=0.8, top_p=0.95)
 start = time.time()
 #llm = LLM(model="meta-llama/Llama-2-7b-hf", cpu_offload_weight=False)
 #llm = LLM(model="mistralai/Mistral-7B-v0.1", max_model_len=2048, cpu_offload_weight=False)
-
 #llm = LLM(model="meta-llama/Llama-2-13b-hf", cpu_offload_weight=True)
-llm = LLM(model="meta-llama/Llama-2-70b-hf", cpu_offload_weight=True)
+llm = LLM(model="meta-llama/Llama-2-13b-hf", cpu_offload_weight=False, tensor_parallel_size=4)
+#llm = LLM(model="meta-llama/Llama-2-70b-hf", cpu_offload_weight=True)
+#llm = LLM(model="meta-llama/Llama-2-70b-hf", cpu_offload_weight=False, tensor_parallel_size=4)
 # Generate texts from the prompts. The output is a list of RequestOutput objects
 # that contain the prompt, generated text, and other information.
 outputs = llm.generate(prompts, sampling_params)
