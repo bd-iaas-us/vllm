@@ -174,6 +174,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         is_driver_worker: bool = False,
         multimodal_config: Optional[MultiModalConfig] = None,
         return_hidden_states: bool = False,
+        gpu_weight_memory_percentage: float = 0,
     ):
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -185,6 +186,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         self.is_driver_worker = is_driver_worker
         self.multimodal_config = multimodal_config
         self.return_hidden_states = return_hidden_states
+        self.gpu_weight_memory_percentage = gpu_weight_memory_percentage
 
         self.device = self.device_config.device
         self.pin_memory = is_pin_memory_available()
@@ -1227,7 +1229,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # TODO(andoorve): We can remove this once all
         # virtual engines share the same kv cache.
         virtual_engine = model_input.virtual_engine
-        if prefill_meta is None and decode_meta.use_cuda_graph:
+        if prefill_meta is None and decode_meta.use_cuda_graph and self.cache_config.gpu_weight_memory_percentage == 0:
             assert model_input.input_tokens is not None
             graph_batch_size = model_input.input_tokens.shape[0]
             model_executable = self.graph_runners[virtual_engine][

@@ -61,18 +61,22 @@ class LlamaMLP(nn.Module):
         intermediate_size: int,
         hidden_act: str,
         quant_config: Optional[QuantizationConfig] = None,
+        cache_config: Optional[CacheConfig] = None,
         bias: bool = False,
     ) -> None:
         super().__init__()
+        gpu_weight_memory_percentage = 0 if cache_config is None else cache_config.gpu_weight_memory_percentage
         self.gate_up_proj = MergedColumnParallelLinear(
             input_size=hidden_size,
             output_sizes=[intermediate_size] * 2,
             bias=bias,
-            quant_config=quant_config)
+            quant_config=quant_config,
+            gpu_weight_memory_percentage = gpu_weight_memory_percentage)
         self.down_proj = RowParallelLinear(input_size=intermediate_size,
                                            output_size=hidden_size,
                                            bias=bias,
-                                           quant_config=quant_config)
+                                           quant_config=quant_config,
+                                           gpu_weight_memory_percentage = gpu_weight_memory_percentage)
         if hidden_act != "silu":
             raise ValueError(f"Unsupported activation: {hidden_act}. "
                              "Only silu is supported for now.")
@@ -122,6 +126,7 @@ class LlamaAttention(nn.Module):
         self.rope_theta = rope_theta
         self.max_position_embeddings = max_position_embeddings
 
+        gpu_weight_memory_percentage = 0 if cache_config is None else cache_config.gpu_weight_memory_percentage
         self.qkv_proj = QKVParallelLinear(
             hidden_size=hidden_size,
             head_size=self.head_dim,
@@ -129,12 +134,14 @@ class LlamaAttention(nn.Module):
             total_num_kv_heads=self.total_num_kv_heads,
             bias=bias,
             quant_config=quant_config,
+            gpu_weight_memory_percentage = gpu_weight_memory_percentage,
         )
         self.o_proj = RowParallelLinear(
             input_size=self.total_num_heads * self.head_dim,
             output_size=hidden_size,
             bias=bias,
             quant_config=quant_config,
+            gpu_weight_memory_percentage = gpu_weight_memory_percentage,
         )
 
         self.rotary_emb = get_rope(
@@ -206,6 +213,7 @@ class LlamaDecoderLayer(nn.Module):
             hidden_act=config.hidden_act,
             quant_config=quant_config,
             bias=getattr(config, "mlp_bias", False),
+            cache_config=cache_config,
         )
         self.input_layernorm = RMSNorm(config.hidden_size,
                                        eps=config.rms_norm_eps)

@@ -96,6 +96,7 @@ class EngineArgs:
     qlora_adapter_name_or_path: Optional[str] = None
 
     otlp_traces_endpoint: Optional[str] = None
+    gpu_weight_memory_percentage: float = 0
 
     def __post_init__(self):
         if self.tokenizer is None:
@@ -591,6 +592,12 @@ class EngineArgs:
             type=str,
             default=None,
             help='Target URL to which OpenTelemetry traces will be sent.')
+        
+        parser.add_argument(
+            '-gpu-weight-memory-percentage',
+            type = float,
+            default = -1,
+            help='the percentage limit of GPU for weights. Extra weights are offloaded to CPU')
 
         return parser
 
@@ -619,6 +626,10 @@ class EngineArgs:
             raise ValueError(
                 "BitsAndBytes load format and QLoRA adapter only support "
                 f"'bitsandbytes' quantization, but got {self.quantization}")
+        
+        if self.gpu_weight_memory_percentage >= self.gpu_memory_utilization:
+            raise ValueError("gpu_weight_memory_percentage must be smaller than gpu_memory_utilization")
+        
         multimodal_config = MultiModalConfig()
 
         device_config = DeviceConfig(device=self.device)
@@ -652,7 +663,8 @@ class EngineArgs:
             cache_dtype=self.kv_cache_dtype,
             num_gpu_blocks_override=self.num_gpu_blocks_override,
             sliding_window=model_config.get_sliding_window(),
-            enable_prefix_caching=self.enable_prefix_caching)
+            enable_prefix_caching=self.enable_prefix_caching,
+            gpu_weight_memory_percentage=self.gpu_weight_memory_percentage)
         parallel_config = ParallelConfig(
             pipeline_parallel_size=self.pipeline_parallel_size,
             tensor_parallel_size=self.tensor_parallel_size,
