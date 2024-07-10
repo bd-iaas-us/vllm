@@ -1,0 +1,74 @@
+/opt/conda/envs/qian/lib/python3.11/site-packages/huggingface_hub/file_download.py:1132: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+=== time_track ===: loading model...
+INFO 07-10 03:01:15 config.py:701] Defaulting to use mp for distributed inference
+INFO 07-10 03:01:15 llm_engine.py:169] Initializing an LLM engine (v0.5.1) with config: model='meta-llama/Llama-2-70b-hf', speculative_config=None, tokenizer='meta-llama/Llama-2-70b-hf', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=4, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None), seed=0, served_model_name=meta-llama/Llama-2-70b-hf, use_v2_block_manager=False, enable_prefix_caching=False)
+[1;36m(VllmWorkerProcess pid=87425)[0;0m INFO 07-10 03:01:16 multiproc_worker_utils.py:215] Worker ready; awaiting tasks
+[1;36m(VllmWorkerProcess pid=87424)[0;0m INFO 07-10 03:01:16 multiproc_worker_utils.py:215] Worker ready; awaiting tasks
+[1;36m(VllmWorkerProcess pid=87423)[0;0m INFO 07-10 03:01:16 multiproc_worker_utils.py:215] Worker ready; awaiting tasks
+INFO 07-10 03:01:16 utils.py:741] Found nccl from library libnccl.so.2
+INFO 07-10 03:01:16 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=87423)[0;0m INFO 07-10 03:01:16 utils.py:741] Found nccl from library libnccl.so.2
+[1;36m(VllmWorkerProcess pid=87423)[0;0m INFO 07-10 03:01:16 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=87425)[0;0m INFO 07-10 03:01:16 utils.py:741] Found nccl from library libnccl.so.2
+[1;36m(VllmWorkerProcess pid=87424)[0;0m INFO 07-10 03:01:16 utils.py:741] Found nccl from library libnccl.so.2
+[1;36m(VllmWorkerProcess pid=87424)[0;0m INFO 07-10 03:01:16 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=87425)[0;0m INFO 07-10 03:01:16 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=87424)[0;0m WARNING 07-10 03:01:17 custom_all_reduce.py:118] Custom allreduce is disabled because it's not supported on more than two PCIe-only GPUs. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+[1;36m(VllmWorkerProcess pid=87423)[0;0m WARNING 07-10 03:01:17 custom_all_reduce.py:118] Custom allreduce is disabled because it's not supported on more than two PCIe-only GPUs. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+[1;36m(VllmWorkerProcess pid=87425)[0;0m WARNING 07-10 03:01:17 custom_all_reduce.py:118] Custom allreduce is disabled because it's not supported on more than two PCIe-only GPUs. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+WARNING 07-10 03:01:17 custom_all_reduce.py:118] Custom allreduce is disabled because it's not supported on more than two PCIe-only GPUs. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+[1;36m(VllmWorkerProcess pid=87425)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=87425)[0;0m INFO 07-10 03:01:17 weight_utils.py:218] Using model weights format ['*.safetensors']
+=== time_track ===: Offloading weight to CPU
+INFO 07-10 03:01:17 weight_utils.py:218] Using model weights format ['*.safetensors']
+[1;36m(VllmWorkerProcess pid=87424)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=87424)[0;0m INFO 07-10 03:01:17 weight_utils.py:218] Using model weights format ['*.safetensors']
+[1;36m(VllmWorkerProcess pid=87423)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=87423)[0;0m INFO 07-10 03:01:17 weight_utils.py:218] Using model weights format ['*.safetensors']
+INFO 07-10 03:10:44 model_runner.py:258] Loading model weights took 15.4995 GB
+[1;36m(VllmWorkerProcess pid=87425)[0;0m INFO 07-10 03:10:44 model_runner.py:258] Loading model weights took 15.4995 GB
+[1;36m(VllmWorkerProcess pid=87423)[0;0m INFO 07-10 03:10:44 model_runner.py:258] Loading model weights took 15.4995 GB
+[1;36m(VllmWorkerProcess pid=87424)[0;0m INFO 07-10 03:10:44 model_runner.py:258] Loading model weights took 15.4995 GB
+INFO 07-10 03:10:44 distributed_gpu_executor.py:56] # GPU blocks: 3388, # CPU blocks: 3276
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  0
+=== time_track ===: Total matrix compute time:  0
+=== time_track ===: Total time to load the model:  575.78160572052
+=== time_track ===: Running the model ..
+Processed prompts:   0%|          | 0/4 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts:  25%|██▌       | 1/4 [00:36<01:48, 36.15s/it, est. speed input: 0.17 toks/s, output: 0.44 toks/s]Processed prompts: 100%|██████████| 4/4 [00:36<00:00,  9.04s/it, est. speed input: 0.75 toks/s, output: 1.77 toks/s]
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.5987625122070312e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.010886669158935547,matrix_compute_cost: 0.00010776519775390625
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.024010658264160156,matrix_compute_cost: 0.00013494491577148438
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.009290695190429688,matrix_compute_cost: 0.00011467933654785156
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 4.76837158203125e-07,matrix_compute_cost: 2.5510787963867188e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.0262300968170166,matrix_compute_cost: 0.00014734268188476562
+WorkerBase.execute_model: model_runner.execute_model
+=========================
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  32.38685369491577
+=== time_track ===: Total matrix compute time:  0.6631062030792236
+=== time_track ===: total time to execute the model:  36.161723136901855
+Prompt: 'Hello, my name is', Generated text: ' Dustin Nelson and I’m going to be posting articles and my thoughts'
+Prompt: 'The president of the United States is', Generated text: ' one of the most powerful people in the world, as the leader of the only'
+Prompt: 'The capital of France is', Generated text: ' one of the world’s leading cities in terms of art, fashion, food'
+Prompt: 'The future of AI is', Generated text: ' neither utopian nor apocalyptic.\nToday, artificial'
+ERROR 07-10 03:11:31 multiproc_worker_utils.py:120] Worker VllmWorkerProcess pid 87423 died, exit code: -15
+INFO 07-10 03:11:31 multiproc_worker_utils.py:123] Killing local vLLM worker processes
+/opt/conda/envs/qian/lib/python3.11/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 2 leaked shared_memory objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

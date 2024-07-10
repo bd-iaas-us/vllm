@@ -11,6 +11,7 @@ from vllm.sequence import (IntermediateTensors, SamplerOutput,
 from vllm.worker.model_runner import (ModelInputForGPUWithSamplingMetadata,
                                       ModelRunner)
 
+
 logger = init_logger(__name__)
 
 

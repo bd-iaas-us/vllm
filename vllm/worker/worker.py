@@ -212,7 +212,8 @@ class Worker(LocalOrDistributedWorkerBase):
         self.cache_config.num_cpu_blocks = num_cpu_blocks
 
         self._init_cache_engine()
-        if self.cache_config.gpu_weight_memory_percentage == 0:
+
+        if self.model_runner.all_weight_in_gpu():
             self._warm_up_model()
 
     def _init_cache_engine(self):

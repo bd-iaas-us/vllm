@@ -1,0 +1,99 @@
+/opt/conda/envs/qian/lib/python3.11/site-packages/huggingface_hub/file_download.py:1132: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+=== time_track ===: loading model...
+INFO 07-10 02:32:00 config.py:701] Defaulting to use mp for distributed inference
+INFO 07-10 02:32:00 llm_engine.py:169] Initializing an LLM engine (v0.5.1) with config: model='meta-llama/Llama-2-13b-hf', speculative_config=None, tokenizer='meta-llama/Llama-2-13b-hf', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=2, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None), seed=0, served_model_name=meta-llama/Llama-2-13b-hf, use_v2_block_manager=False, enable_prefix_caching=False)
+[1;36m(VllmWorkerProcess pid=80847)[0;0m INFO 07-10 02:32:01 multiproc_worker_utils.py:215] Worker ready; awaiting tasks
+[1;36m(VllmWorkerProcess pid=80847)[0;0m INFO 07-10 02:32:02 utils.py:741] Found nccl from library libnccl.so.2
+INFO 07-10 02:32:02 utils.py:741] Found nccl from library libnccl.so.2
+INFO 07-10 02:32:02 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=80847)[0;0m INFO 07-10 02:32:02 pynccl.py:63] vLLM is using nccl==2.20.5
+INFO 07-10 02:32:02 custom_all_reduce_utils.py:232] reading GPU P2P access cache from /home/ubuntu/.config/vllm/gpu_p2p_access_cache_for_0,1.json
+[1;36m(VllmWorkerProcess pid=80847)[0;0m INFO 07-10 02:32:02 custom_all_reduce_utils.py:232] reading GPU P2P access cache from /home/ubuntu/.config/vllm/gpu_p2p_access_cache_for_0,1.json
+WARNING 07-10 02:32:02 custom_all_reduce.py:127] Custom allreduce is disabled because your platform lacks GPU P2P capability or P2P test failed. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+[1;36m(VllmWorkerProcess pid=80847)[0;0m WARNING 07-10 02:32:02 custom_all_reduce.py:127] Custom allreduce is disabled because your platform lacks GPU P2P capability or P2P test failed. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+INFO 07-10 02:32:02 weight_utils.py:218] Using model weights format ['*.safetensors']
+[1;36m(VllmWorkerProcess pid=80847)[0;0m INFO 07-10 02:32:02 weight_utils.py:218] Using model weights format ['*.safetensors']
+INFO 07-10 02:32:07 model_runner.py:258] Loading model weights took 12.2600 GB
+[1;36m(VllmWorkerProcess pid=80847)[0;0m INFO 07-10 02:32:07 model_runner.py:258] Loading model weights took 12.2600 GB
+INFO 07-10 02:32:07 distributed_gpu_executor.py:56] # GPU blocks: 1208, # CPU blocks: 655
+INFO 07-10 02:32:11 model_runner.py:936] Capturing the model for CUDA graphs. This may lead to unexpected consequences if the model is not static. To run the model in eager mode, set 'enforce_eager=True' or use '--enforce-eager' in the CLI.
+INFO 07-10 02:32:11 model_runner.py:940] CUDA graphs can take additional 1~3 GiB memory per GPU. If you are running out of memory, consider decreasing `gpu_memory_utilization` or enforcing eager mode. You can also reduce the `max_num_seqs` as needed to decrease memory usage.
+[1;36m(VllmWorkerProcess pid=80847)[0;0m INFO 07-10 02:32:11 model_runner.py:936] Capturing the model for CUDA graphs. This may lead to unexpected consequences if the model is not static. To run the model in eager mode, set 'enforce_eager=True' or use '--enforce-eager' in the CLI.
+[1;36m(VllmWorkerProcess pid=80847)[0;0m INFO 07-10 02:32:11 model_runner.py:940] CUDA graphs can take additional 1~3 GiB memory per GPU. If you are running out of memory, consider decreasing `gpu_memory_utilization` or enforcing eager mode. You can also reduce the `max_num_seqs` as needed to decrease memory usage.
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 1.1920928955078125e-06,matrix_compute_cost: 4.172325134277344e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.4318695068359375e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 1.8358230590820312e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.4557113647460938e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.4080276489257812e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.956390380859375e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 1.1920928955078125e-06,matrix_compute_cost: 2.3365020751953125e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 1.1920928955078125e-06,matrix_compute_cost: 2.384185791015625e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 1.8358230590820312e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 1.1920928955078125e-06,matrix_compute_cost: 2.2411346435546875e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 1.9073486328125e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 4.76837158203125e-07,matrix_compute_cost: 2.0503997802734375e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.4080276489257812e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.4557113647460938e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.1457672119140625e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 0.000133514404296875
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 1.1920928955078125e-06,matrix_compute_cost: 2.4080276489257812e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 1.430511474609375e-06,matrix_compute_cost: 2.3365020751953125e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.1457672119140625e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m === time_track ===: tp_rank: 1 ,                   weight_move_cost: 1.1920928955078125e-06,matrix_compute_cost: 2.3603439331054688e-05
+[1;36m(VllmWorkerProcess pid=80847)[0;0m INFO 07-10 02:32:24 model_runner.py:1129] Graph capturing finished in 13 secs.
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.5272369384765625e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.4080276489257812e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 4.76837158203125e-07,matrix_compute_cost: 1.7881393432617188e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.47955322265625e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.3126602172851562e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 1.1920928955078125e-06,matrix_compute_cost: 2.9325485229492188e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.384185791015625e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.384185791015625e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 1.7881393432617188e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.2649765014648438e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 1.7881393432617188e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.2172927856445312e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.3365020751953125e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.4318695068359375e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.193450927734375e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 1.1920928955078125e-06,matrix_compute_cost: 0.0001289844512939453
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.4318695068359375e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.3365020751953125e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.09808349609375e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 9.5367431640625e-07,matrix_compute_cost: 2.3365020751953125e-05
+INFO 07-10 02:32:24 model_runner.py:1129] Graph capturing finished in 13 secs.
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  0.013724327087402344
+=== time_track ===: Total matrix compute time:  0.6677875518798828
+=== time_track ===: Total time to load the model:  23.62252402305603
+=== time_track ===: Running the model ..
+Processed prompts:   0%|          | 0/4 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts:  25%|██▌       | 1/4 [00:00<00:02,  1.23it/s, est. speed input: 7.40 toks/s, output: 19.74 toks/s]Processed prompts: 100%|██████████| 4/4 [00:00<00:00,  4.93it/s, est. speed input: 33.31 toks/s, output: 78.95 toks/s]
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 1.1920928955078125e-06,matrix_compute_cost: 2.5272369384765625e-05
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=========================
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  0.0001552104949951172
+=== time_track ===: Total matrix compute time:  0.005423784255981445
+=== time_track ===: total time to execute the model:  0.8150844573974609
+Prompt: 'Hello, my name is', Generated text: " Debbie and I'm the owner and operator of Sunshine Sunflow"
+Prompt: 'The president of the United States is', Generated text: ' a member of an exclusive club.\nThe oldest person in the club is '
+Prompt: 'The capital of France is', Generated text: ' one of the world’s leading business and cultural centers, and is also'
+Prompt: 'The future of AI is', Generated text: ' here, and it is happening in our backyard. The Bay Area is the'
+/opt/conda/envs/qian/lib/python3.11/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 2 leaked shared_memory objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

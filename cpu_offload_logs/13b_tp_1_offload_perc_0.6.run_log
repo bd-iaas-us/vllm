@@ -1,0 +1,111 @@
+/opt/conda/envs/qian/lib/python3.11/site-packages/huggingface_hub/file_download.py:1132: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+=== time_track ===: loading model...
+INFO 07-10 02:37:52 llm_engine.py:169] Initializing an LLM engine (v0.5.1) with config: model='meta-llama/Llama-2-13b-hf', speculative_config=None, tokenizer='meta-llama/Llama-2-13b-hf', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None), seed=0, served_model_name=meta-llama/Llama-2-13b-hf, use_v2_block_manager=False, enable_prefix_caching=False)
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+INFO 07-10 02:37:53 weight_utils.py:218] Using model weights format ['*.safetensors']
+INFO 07-10 02:37:57 model_runner.py:258] Loading model weights took 13.4656 GB
+INFO 07-10 02:37:57 gpu_executor.py:84] # GPU blocks: 514, # CPU blocks: 327
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  0
+=== time_track ===: Total matrix compute time:  0
+=== time_track ===: Total time to load the model:  9.169841527938843
+=== time_track ===: Running the model ..
+Processed prompts:   0%|          | 0/4 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts:  25%|██▌       | 1/4 [00:15<00:47, 15.95s/it, est. speed input: 0.38 toks/s, output: 1.00 toks/s]Processed prompts: 100%|██████████| 4/4 [00:15<00:00,  3.99s/it, est. speed input: 1.69 toks/s, output: 4.01 toks/s]
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.02170395851135254,matrix_compute_cost: 0.00012421607971191406
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.02171492576599121,matrix_compute_cost: 9.894371032714844e-05
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=========================
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  14.798254489898682
+=== time_track ===: Total matrix compute time:  0.2637479305267334
+=== time_track ===: total time to execute the model:  15.95845651626587
+Prompt: 'Hello, my name is', Generated text: " Debbie and I'm the owner and operator of Sunshine Sunflow"
+Prompt: 'The president of the United States is', Generated text: ' a member of an exclusive club.\nThe oldest person in the club is '
+Prompt: 'The capital of France is', Generated text: ' one of the world’s leading business and cultural centers, and is also'
+Prompt: 'The future of AI is', Generated text: ' here, and it is happening in our backyard. The Bay Area is the'

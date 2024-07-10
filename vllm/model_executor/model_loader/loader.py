@@ -283,6 +283,8 @@ class DefaultModelLoader(BaseModelLoader):
                 # to use quant_method.
                 if hasattr(module, "process_weights_after_loading"):
                     module.process_weights_after_loading()
+
+
         return model.eval()
 
 

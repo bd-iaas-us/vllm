@@ -451,6 +451,7 @@ class CacheConfig:
         # Will be set after profiling.
         self.num_gpu_blocks = None
         self.num_cpu_blocks = None
+        self.offload_weight_to_cpu = False
 
     def metrics_info(self):
         # convert cache_config to dict(key: str, value: str) for prometheus

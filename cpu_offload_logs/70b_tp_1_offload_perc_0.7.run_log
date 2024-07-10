@@ -1,0 +1,45 @@
+/opt/conda/envs/qian/lib/python3.11/site-packages/huggingface_hub/file_download.py:1132: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+=== time_track ===: loading model...
+INFO 07-10 03:37:23 llm_engine.py:169] Initializing an LLM engine (v0.5.1) with config: model='meta-llama/Llama-2-70b-hf', speculative_config=None, tokenizer='meta-llama/Llama-2-70b-hf', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None), seed=0, served_model_name=meta-llama/Llama-2-70b-hf, use_v2_block_manager=False, enable_prefix_caching=False)
+=== time_track ===: Offloading weight to CPU
+INFO 07-10 03:37:25 weight_utils.py:218] Using model weights format ['*.safetensors']
+INFO 07-10 03:48:15 model_runner.py:258] Loading model weights took 15.7612 GB
+INFO 07-10 03:48:15 gpu_executor.py:84] # GPU blocks: 816, # CPU blocks: 819
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  0
+=== time_track ===: Total matrix compute time:  0
+=== time_track ===: Total time to load the model:  656.3888096809387
+=== time_track ===: Running the model ..
+Processed prompts:   0%|          | 0/4 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts:  25%|██▌       | 1/4 [02:36<07:50, 156.78s/it, est. speed input: 0.04 toks/s, output: 0.10 toks/s]Processed prompts: 100%|██████████| 4/4 [02:36<00:00, 39.19s/it, est. speed input: 0.17 toks/s, output: 0.41 toks/s] 
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.08122563362121582,matrix_compute_cost: 0.00019478797912597656
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.04276871681213379,matrix_compute_cost: 0.0001595020294189453
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.0718696117401123,matrix_compute_cost: 0.00011849403381347656
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.013664722442626953,matrix_compute_cost: 0.00011229515075683594
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.03772091865539551,matrix_compute_cost: 0.00011205673217773438
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.0719144344329834,matrix_compute_cost: 0.00012254714965820312
+WorkerBase.execute_model: model_runner.execute_model
+=========================
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  153.88569164276123
+=== time_track ===: Total matrix compute time:  0.8469178676605225
+=== time_track ===: total time to execute the model:  156.80195951461792
+Prompt: 'Hello, my name is', Generated text: ' Dustin Nelson and I’m going to be posting articles and my thoughts'
+Prompt: 'The president of the United States is', Generated text: ' one of the most powerful people in the world, as the leader of the only'
+Prompt: 'The capital of France is', Generated text: ' one of the world’s leading cities in terms of art, fashion, food'
+Prompt: 'The future of AI is', Generated text: ' neither utopian nor apocalyptic.\nToday, artificial'

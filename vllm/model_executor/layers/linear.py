@@ -15,7 +15,20 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 from vllm.model_executor.utils import set_weight_attrs
 
+
+import time
+
 logger = init_logger(__name__)
+
+total_weight_load_time = 0
+total_matrix_compute_time = 0
+printed = False
+
+# weight_move_cost_1 = 0
+# weight_move_cost_2 = 0
+# weight_move_cost_3 = 0
+# weight_move_cost_0 = 0
+# apply_count = 0
 
 
 def adjust_marlin_shard(param, shard_size, shard_offset):
@@ -97,6 +110,7 @@ class LinearMethodBase(QuantizeMethodBase):
         Expects create_weights to have been called before on the layer."""
         raise NotImplementedError
 
+count = 0
 
 class UnquantizedLinearMethod(LinearMethodBase):
     """Linear method without quantization.
@@ -130,6 +144,11 @@ class UnquantizedLinearMethod(LinearMethodBase):
                 offload_to_cpu = True
 
         if offload_to_cpu:
+            global printed
+            if printed == False:
+                print("=== time_track ===: Offloading weight to CPU")
+                printed = True
+            # logger.info(f"Offloading weight to CPU keep GPU weight memory under {gpu_weight_memory_percentage*100}%")
             weight = Parameter(torch.empty(sum(output_partition_sizes),
                                        input_size_per_partition,
                                        dtype=params_dtype,
@@ -148,16 +167,45 @@ class UnquantizedLinearMethod(LinearMethodBase):
               layer: torch.nn.Module,
               x: torch.Tensor,
               bias: Optional[torch.Tensor] = None) -> torch.Tensor:
+        
+        global count
+        count += 1
+        import random
+        rand_num = random.randint(0, 9999)
+
+        global total_weight_load_time
+
+        global total_matrix_compute_time
+
         weight = layer.weight
 
+        start = time.time()
         if weight.device != x.device:
             weight = weight.to(x.device)
 
+        weight_move_cost = time.time() - start
+        
+        total_weight_load_time += weight_move_cost
+
+        
+        
+        start = time.time()
         if self.separate_bias_add:
             if bias is not None:
                 return F.linear(x, weight) + bias
             return F.linear(x, weight)
-        return F.linear(x, weight, bias)
+        result = F.linear(x, weight, bias)
+        matrix_compute_cost = time.time() - start
+        total_matrix_compute_time += time.time() - start
+
+
+        if rand_num % 1000 == 0:
+            tp_rank = get_tensor_model_parallel_rank()
+            print(f"=== time_track ===: tp_rank: {tp_rank } , \
+                  weight_move_cost: {weight_move_cost},matrix_compute_cost: {matrix_compute_cost}")
+            
+            
+        return result
 
 
 class LinearBase(torch.nn.Module):
@@ -498,6 +546,9 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                     "the same for all partitions.")
 
         assert param_data.shape == loaded_weight.shape
+        # global count
+        # count += 1
+        # print(f"~~~~~~~~count: {count}~~~~~~~~")
         param_data.copy_(loaded_weight)
 
 

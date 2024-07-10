@@ -57,6 +57,7 @@ if TYPE_CHECKING:
 
 logger = init_logger(__name__)
 
+
 _PAD_SLOT_ID = -1
 LORA_WARMUP_RANK = 8
 _BATCH_SIZE_ALIGNMENT = 8
@@ -873,7 +874,16 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
                 batch_size=batch_size,
                 dtype=self.model_config.dtype,
                 device=self.device)
-        self.execute_model(model_input, kv_caches, intermediate_tensors)
+        # print("=== time_track ===: Running the model for memory profiling...")
+        from vllm.model_executor.layers.linear import (total_weight_load_time, total_matrix_compute_time)
+        # apply_count = 0
+        # total_weight_load_time =  0
+        # total_matrix_compute_time = 0
+        # self.execute_model(model_input, kv_caches, intermediate_tensors)
+        # print("=== time_track ===: Done running the model for memory profiling.")
+        # print("=== time_track ===: Total weight load time: ", total_weight_load_time)
+        # print("=== time_track ===: Total matrix compute time: ", total_matrix_compute_time)
+    
         torch.cuda.synchronize()
         return
 
@@ -1229,7 +1239,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # TODO(andoorve): We can remove this once all
         # virtual engines share the same kv cache.
         virtual_engine = model_input.virtual_engine
-        if prefill_meta is None and decode_meta.use_cuda_graph and self.cache_config.gpu_weight_memory_percentage == 0:
+        if prefill_meta is None and decode_meta.use_cuda_graph and self.all_weight_in_gpu():
             assert model_input.input_tokens is not None
             graph_batch_size = model_input.input_tokens.shape[0]
             model_executable = self.graph_runners[virtual_engine][
@@ -1282,6 +1292,12 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             output.hidden_states = hidden_states
 
         return [output]
+    
+    def all_weight_in_gpu(self):
+        for name, param in self.model.named_parameters():
+            if not param.is_cuda:
+                return False
+        return True
 
 
 class CUDAGraphRunner:

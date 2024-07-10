@@ -1,0 +1,92 @@
+/opt/conda/envs/qian/lib/python3.11/site-packages/huggingface_hub/file_download.py:1132: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+=== time_track ===: loading model...
+INFO 07-10 02:41:29 config.py:701] Defaulting to use mp for distributed inference
+INFO 07-10 02:41:29 llm_engine.py:169] Initializing an LLM engine (v0.5.1) with config: model='meta-llama/Llama-2-13b-hf', speculative_config=None, tokenizer='meta-llama/Llama-2-13b-hf', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=2, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None), seed=0, served_model_name=meta-llama/Llama-2-13b-hf, use_v2_block_manager=False, enable_prefix_caching=False)
+[1;36m(VllmWorkerProcess pid=82950)[0;0m INFO 07-10 02:41:30 multiproc_worker_utils.py:215] Worker ready; awaiting tasks
+[1;36m(VllmWorkerProcess pid=82950)[0;0m INFO 07-10 02:41:30 utils.py:741] Found nccl from library libnccl.so.2
+INFO 07-10 02:41:30 utils.py:741] Found nccl from library libnccl.so.2
+INFO 07-10 02:41:30 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=82950)[0;0m INFO 07-10 02:41:30 pynccl.py:63] vLLM is using nccl==2.20.5
+[1;36m(VllmWorkerProcess pid=82950)[0;0m INFO 07-10 02:41:30 custom_all_reduce_utils.py:232] reading GPU P2P access cache from /home/ubuntu/.config/vllm/gpu_p2p_access_cache_for_0,1.json
+INFO 07-10 02:41:30 custom_all_reduce_utils.py:232] reading GPU P2P access cache from /home/ubuntu/.config/vllm/gpu_p2p_access_cache_for_0,1.json
+WARNING 07-10 02:41:30 custom_all_reduce.py:127] Custom allreduce is disabled because your platform lacks GPU P2P capability or P2P test failed. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+[1;36m(VllmWorkerProcess pid=82950)[0;0m WARNING 07-10 02:41:30 custom_all_reduce.py:127] Custom allreduce is disabled because your platform lacks GPU P2P capability or P2P test failed. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+INFO 07-10 02:41:31 weight_utils.py:218] Using model weights format ['*.safetensors']
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m === time_track ===: Offloading weight to CPU
+[1;36m(VllmWorkerProcess pid=82950)[0;0m INFO 07-10 02:41:31 weight_utils.py:218] Using model weights format ['*.safetensors']
+INFO 07-10 02:41:34 model_runner.py:258] Loading model weights took 11.1390 GB
+[1;36m(VllmWorkerProcess pid=82950)[0;0m INFO 07-10 02:41:34 model_runner.py:258] Loading model weights took 11.1390 GB
+INFO 07-10 02:41:34 distributed_gpu_executor.py:56] # GPU blocks: 1391, # CPU blocks: 655
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  0
+=== time_track ===: Total matrix compute time:  0
+=== time_track ===: Total time to load the model:  9.178634643554688
+=== time_track ===: Running the model ..
+Processed prompts:   0%|          | 0/4 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts:  25%|██▌       | 1/4 [00:03<00:09,  3.27s/it, est. speed input: 1.83 toks/s, output: 4.89 toks/s]Processed prompts: 100%|██████████| 4/4 [00:03<00:00,  1.22it/s, est. speed input: 8.25 toks/s, output: 19.56 toks/s]
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.010978460311889648,matrix_compute_cost: 0.000110626220703125
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.4318695068359375e-05
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=========================
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  1.7184813022613525
+=== time_track ===: Total matrix compute time:  0.18728876113891602
+=== time_track ===: total time to execute the model:  3.2773232460021973
+Prompt: 'Hello, my name is', Generated text: " Debbie and I'm the owner and operator of Sunshine Sunflow"
+Prompt: 'The president of the United States is', Generated text: ' a member of an exclusive club.\nThe oldest person in the club is '
+Prompt: 'The capital of France is', Generated text: ' one of the world’s leading business and cultural centers, and is also'
+Prompt: 'The future of AI is', Generated text: ' here, and it is happening in our backyard. The Bay Area is the'
+INFO 07-10 02:41:44 multiproc_worker_utils.py:123] Killing local vLLM worker processes
+Fatal Python error: _enter_buffered_busy: could not acquire lock for <_io.BufferedWriter name='<stdout>'> at interpreter shutdown, possibly due to daemon threads
+Python runtime state: finalizing (tstate=0x0000560bbb2f1998)
+
+Current thread 0x00007fd942de0740 (most recent call first):
+  <no Python frame>
+
+Extension modules: numpy.core._multiarray_umath, numpy.core._multiarray_tests, numpy.linalg._umath_linalg, numpy.fft._pocketfft_internal, numpy.random._common, numpy.random.bit_generator, numpy.random._bounded_integers, numpy.random._mt19937, numpy.random.mtrand, numpy.random._philox, numpy.random._pcg64, numpy.random._sfc64, numpy.random._generator, torch._C, torch._C._fft, torch._C._linalg, torch._C._nested, torch._C._nn, torch._C._sparse, torch._C._special, charset_normalizer.md, requests.packages.charset_normalizer.md, requests.packages.chardet.md, yaml._yaml, psutil._psutil_linux, psutil._psutil_posix, sentencepiece._sentencepiece, msgpack._cmsgpack, google._upb._message, setproctitle, uvloop.loop, ray._raylet, hiredis.hiredis, PIL._imaging (total: 34)
+/opt/conda/envs/qian/lib/python3.11/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 2 leaked shared_memory objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

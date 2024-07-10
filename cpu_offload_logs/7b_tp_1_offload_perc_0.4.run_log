@@ -1,0 +1,77 @@
+/opt/conda/envs/qian/lib/python3.11/site-packages/huggingface_hub/file_download.py:1132: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+=== time_track ===: loading model...
+INFO 07-10 02:29:05 llm_engine.py:169] Initializing an LLM engine (v0.5.1) with config: model='meta-llama/Llama-2-7b-hf', speculative_config=None, tokenizer='meta-llama/Llama-2-7b-hf', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None), seed=0, served_model_name=meta-llama/Llama-2-7b-hf, use_v2_block_manager=False, enable_prefix_caching=False)
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+=== time_track ===: Offloading weight to CPU
+INFO 07-10 02:29:06 weight_utils.py:218] Using model weights format ['*.safetensors']
+INFO 07-10 02:29:09 model_runner.py:258] Loading model weights took 9.0230 GB
+INFO 07-10 02:29:09 gpu_executor.py:84] # GPU blocks: 1372, # CPU blocks: 512
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  0
+=== time_track ===: Total matrix compute time:  0
+=== time_track ===: Total time to load the model:  6.920955181121826
+=== time_track ===: Running the model ..
+Processed prompts:   0%|          | 0/4 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts:  25%|██▌       | 1/4 [00:05<00:17,  5.93s/it, est. speed input: 1.01 toks/s, output: 2.70 toks/s]Processed prompts: 100%|██████████| 4/4 [00:05<00:00,  1.48s/it, est. speed input: 4.56 toks/s, output: 10.80 toks/s]
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.1219253540039062e-05
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 7.152557373046875e-07,matrix_compute_cost: 2.5033950805664062e-05
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=== time_track ===: tp_rank: 0 ,                   weight_move_cost: 0.013882875442504883,matrix_compute_cost: 0.00010418891906738281
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+WorkerBase.execute_model: model_runner.execute_model
+=========================
+=== time_track ===: Done running the model for memory profiling.
+=== time_track ===: Total weight load time:  4.919728517532349
+=== time_track ===: Total matrix compute time:  0.2143092155456543
+=== time_track ===: total time to execute the model:  5.930276155471802
+Prompt: 'Hello, my name is', Generated text: ' Dustin Nelson and I’m going to be your tutor!\n'
+Prompt: 'The president of the United States is', Generated text: ' a member of an exclusive club.\nDonald Trump is not the only person to'
+Prompt: 'The capital of France is', Generated text: ' one of the most visited cities in Europe. With its famous sites, rich history'
+Prompt: 'The future of AI is', Generated text: ' likely to be more than simply smart assistants.\nToday, artificial'
