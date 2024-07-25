@@ -26,24 +26,24 @@ def create_test_prompts(
                         prompt_logprobs=1,
                         max_tokens=128), None),
         # the next three examples use quantization with LoRA
-        ("my name is",
-         SamplingParams(temperature=0.0,
-                        logprobs=1,
-                        prompt_logprobs=1,
-                        max_tokens=128),
-         LoRARequest("lora-test-1", 1, lora_path)),
-        ("The capital of USA is",
-         SamplingParams(temperature=0.0,
-                        logprobs=1,
-                        prompt_logprobs=1,
-                        max_tokens=128),
-         LoRARequest("lora-test-2", 1, lora_path)),
-        ("The capital of France is",
-         SamplingParams(temperature=0.0,
-                        logprobs=1,
-                        prompt_logprobs=1,
-                        max_tokens=128),
-         LoRARequest("lora-test-3", 1, lora_path)),
+        # ("my name is",
+        #  SamplingParams(temperature=0.0,
+        #                 logprobs=1,
+        #                 prompt_logprobs=1,
+        #                 max_tokens=128),
+        #  LoRARequest("lora-test-1", 1, lora_path)),
+        # ("The capital of USA is",
+        #  SamplingParams(temperature=0.0,
+        #                 logprobs=1,
+        #                 prompt_logprobs=1,
+        #                 max_tokens=128),
+        #  LoRARequest("lora-test-2", 1, lora_path)),
+        # ("The capital of France is",
+        #  SamplingParams(temperature=0.0,
+        #                 logprobs=1,
+        #                 prompt_logprobs=1,
+        #                 max_tokens=128),
+        #  LoRARequest("lora-test-3", 1, lora_path)),
     ]
 
 
@@ -107,16 +107,16 @@ def main():
         'model': "huggyllama/llama-7b",
         'quantization': "bitsandbytes",
         'lora_repo': 'timdettmers/qlora-flan-7b'
-    }, {
-        "name": "AWQ_inference_with_lora_example",
-        'model': 'TheBloke/TinyLlama-1.1B-Chat-v0.3-AWQ',
-        'quantization': "awq",
-        'lora_repo': 'jashing/tinyllama-colorist-lora'
-    }, {
-        "name": "GPTQ_inference_with_lora_example",
-        'model': 'TheBloke/TinyLlama-1.1B-Chat-v0.3-GPTQ',
-        'quantization': "gptq",
-        'lora_repo': 'jashing/tinyllama-colorist-lora'
+    # }, {
+    #     "name": "AWQ_inference_with_lora_example",
+    #     'model': 'TheBloke/TinyLlama-1.1B-Chat-v0.3-AWQ',
+    #     'quantization': "awq",
+    #     'lora_repo': 'jashing/tinyllama-colorist-lora'
+    # }, {
+    #     "name": "GPTQ_inference_with_lora_example",
+    #     'model': 'TheBloke/TinyLlama-1.1B-Chat-v0.3-GPTQ',
+    #     'quantization': "gptq",
+    #     'lora_repo': 'jashing/tinyllama-colorist-lora'
     }]
 
     for test_config in test_configs:

@@ -15,7 +15,7 @@ class BitsAndBytesConfig(QuantizationConfig):
     Reference: https://arxiv.org/abs/2305.14314
     """
 
-    def __init__(self, ) -> None:
+    def __init__(self, load_in_8bit: bool = False ) -> None:
         pass
 
     def __repr__(self) -> str:
@@ -41,6 +41,7 @@ class BitsAndBytesConfig(QuantizationConfig):
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "BitsAndBytesConfig":
+
         return cls()
 
     def get_quant_method(self, layer: torch.nn.Module,
