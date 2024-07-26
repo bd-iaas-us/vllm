@@ -14,8 +14,8 @@ sampling_params = SamplingParams(temperature=0.8, top_p=0.95)
 # Create an LLM.
 
 #llm = LLM(model="lllyasviel/omost-llama-3-8b-4bits", dtype=torch.bfloat16, trust_remote_code=True,\
-llm = LLM(model="meta-llama/Llama-Guard-3-8B-INT8", dtype=torch.bfloat16, trust_remote_code=True,\
-           quantization="bitsandbytes", load_format="bitsandbytes", gpu_memory_utilization=0.7, enforce_eager=True)
+llm = LLM(model="meta-llama/Llama-Guard-3-8B-INT8", trust_remote_code=True,\
+           quantization="bitsandbytes", load_format="bitsandbytes", gpu_memory_utilization=0.8, enforce_eager=True, max_model_len=4096)
 # Generate texts from the prompts. The output is a list of RequestOutput objects
 # that contain the prompt, generated text, and other information.
 outputs = llm.generate(prompts, sampling_params)

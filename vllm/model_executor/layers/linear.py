@@ -450,8 +450,8 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 shard_size, shard_offset = adjust_marlin_shard(
                     param, shard_size, shard_offset)
 
-            use_bitsandbytes = getattr(param, "use_bitsandbytes", False)
-            if use_bitsandbytes:
+            use_bitsandbytes_4bit = getattr(param, "use_bitsandbytes_4bit", False)
+            if use_bitsandbytes_4bit:
                 shard_size = loaded_weight.shape[output_dim]
                 shard_offset = loaded_weight.shape[output_dim] * \
                     loaded_shard_id
@@ -630,8 +630,8 @@ class QKVParallelLinear(ColumnParallelLinear):
                 shard_size, shard_offset = adjust_marlin_shard(
                     param, shard_size, shard_offset)
 
-            use_bitsandbytes = getattr(param, "use_bitsandbytes", False)
-            if use_bitsandbytes:
+            use_bitsandbytes_4bit = getattr(param, "use_bitsandbytes_4bit", False)
+            if use_bitsandbytes_4bit:
                 orig_qkv_offsets = {
                     "q": (0, self.num_heads * self.head_size),
                     "k": (self.num_heads * self.head_size,
