@@ -709,7 +709,7 @@ class BitsAndBytesModelLoader(BaseModelLoader):
             return pt_weights_iterator(hf_weights_files)
 
     def _get_quantized_weights_iterator(
-        self, model_name_or_path: str, revision: Optional[str], pre_quant: bool
+        self, model_name_or_path: str, revision: Optional[str], pre_quant: bool, load_8bit: bool
     ) -> Tuple[Generator[Tuple[str, torch.Tensor], None, None], Dict[str,
                                                                      Any]]:
         """Get an iterator to the model weights with bitsandbytes quantization,
@@ -732,6 +732,28 @@ class BitsAndBytesModelLoader(BaseModelLoader):
             model_name_or_path, revision)
 
         quant_state_dict = {}
+
+        def quantized_8bit_checkpoint() -> Generator:
+            for weight_name, weight_tensor in self._hf_weight_iter(
+                    hf_weights_files, use_safetensors):
+                if not weight_name.lower().endswith(".scb"):
+                    continue
+
+                weight_key = weight_name.lower().replace(".scb", ".qweight")
+                quant_state_dict[weight_key] = weight_tensor
+
+            for weight_name, weight_tensor in self._hf_weight_iter(
+                    hf_weights_files, use_safetensors):
+                
+                if not weight_name.endswith(".weight"):
+                    continue
+                
+                qweight_name = weight_name.replace(".weight", ".qweight")
+                if qweight_name in quant_state_dict.keys():
+                    set_weight_attrs(weight_tensor, {"load_in_8bit": True})
+                    yield qweight_name, weight_tensor
+                else:
+                     yield weight_name, weight_tensor
 
         def quantized_checkpoint() -> Generator:
             # First iterate over all quant state weights
@@ -803,7 +825,10 @@ class BitsAndBytesModelLoader(BaseModelLoader):
                 yield weight_name, processed_weight
 
         if pre_quant:
-            return quantized_checkpoint(), quant_state_dict
+            if load_8bit:
+                return quantized_8bit_checkpoint(), quant_state_dict
+            else:
+                return quantized_checkpoint(), quant_state_dict
         return generator(), quant_state_dict
 
     def _load_weights(self, model_config: ModelConfig,
@@ -822,15 +847,20 @@ class BitsAndBytesModelLoader(BaseModelLoader):
                     " May take a while ...")
 
         is_quantized_checkpoint = False
+        quantized_8bit = False
+
         quant_config = getattr(model_config.hf_config, "quantization_config",
                                None)
-        if quant_config is not None and quant_config.get(
-                'quant_method') == "bitsandbytes":
-            is_quantized_checkpoint = True
+        if quant_config is not None:
+            if quant_config.get('quant_method') == "bitsandbytes":
+                is_quantized_checkpoint = True
+
+            if is_quantized_checkpoint:
+                quantized_8bit = quant_config.get("load_in_8bit", False)
 
         qweight_iterator, quant_state_dict = \
             self._get_quantized_weights_iterator(
-            model_config.model, model_config.revision, is_quantized_checkpoint)
+            model_config.model, model_config.revision, is_quantized_checkpoint, quantized_8bit)
 
         model.load_weights(qweight_iterator)
 
