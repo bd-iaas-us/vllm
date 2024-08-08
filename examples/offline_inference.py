@@ -8,7 +8,7 @@ prompt_template = "Below is an instruction that describes a task. Write a respon
 prompt = 'Please show how binary search works in Python.'
 inputt = prompt_template.format(instruction= prompt)
 prompts =[
-    "my name is",
+    "The capital of France is",
 ]
 
 tok_name = "mistralai/Mistral-7B-Instruct-v0.1"

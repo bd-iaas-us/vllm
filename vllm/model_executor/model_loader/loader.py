@@ -709,7 +709,9 @@ class BitsAndBytesModelLoader(BaseModelLoader):
             return pt_weights_iterator(hf_weights_files)
 
     def _get_quantized_weights_iterator(
-        self, model_name_or_path: str, revision: Optional[str], pre_quant: bool, load_8bit: bool
+        self, model_name_or_path: str, revision: Optional[str], 
+        pre_quant: bool,
+        load_8bit: bool,
     ) -> Tuple[Generator[Tuple[str, torch.Tensor], None, None], Dict[str,
                                                                      Any]]:
         """Get an iterator to the model weights with bitsandbytes quantization,
@@ -727,7 +729,7 @@ class BitsAndBytesModelLoader(BaseModelLoader):
             raise ImportError("Please install bitsandbytes>=0.42.0 via "
                               "`pip install bitsandbytes>=0.42.0` to use "
                               "bitsandbytes quantizer.") from err
-
+        
         hf_weights_files, use_safetensors = self._prepare_weights(
             model_name_or_path, revision)
 
@@ -755,7 +757,7 @@ class BitsAndBytesModelLoader(BaseModelLoader):
                 else:
                      yield weight_name, weight_tensor
 
-        def quantized_checkpoint() -> Generator:
+        def quantized_4bit_checkpoint() -> Generator:
             # First iterate over all quant state weights
             weight_iterator = self._hf_weight_iter(hf_weights_files,
                                                    use_safetensors)
@@ -828,7 +830,7 @@ class BitsAndBytesModelLoader(BaseModelLoader):
             if load_8bit:
                 return quantized_8bit_checkpoint(), quant_state_dict
             else:
-                return quantized_checkpoint(), quant_state_dict
+                return quantized_4bit_checkpoint(), quant_state_dict
         return generator(), quant_state_dict
 
     def _load_weights(self, model_config: ModelConfig,
@@ -851,16 +853,23 @@ class BitsAndBytesModelLoader(BaseModelLoader):
 
         quant_config = getattr(model_config.hf_config, "quantization_config",
                                None)
+        
+        pre_quant = False
         if quant_config is not None:
-            if quant_config.get('quant_method') == "bitsandbytes":
-                is_quantized_checkpoint = True
+            quant_method = quant_config.get('quant_method')
+            if quant_method == "bitsandbytes":
+                pre_quant = True
+            else:
+                raise ValueError(f"BitsAndBytes loader does not support {quant_method} quantization")
 
-            if is_quantized_checkpoint:
-                quantized_8bit = quant_config.get("load_in_8bit", False)
+        load_8bit = False
+        if pre_quant:
+            load_8bit = quant_config.get('load_in_8bit', False)
+
 
         qweight_iterator, quant_state_dict = \
             self._get_quantized_weights_iterator(
-            model_config.model, model_config.revision, is_quantized_checkpoint, quantized_8bit)
+            model_config.model, model_config.revision, pre_quant, load_8bit)
 
         model.load_weights(qweight_iterator)
 
@@ -896,7 +905,7 @@ class BitsAndBytesModelLoader(BaseModelLoader):
             if param_name in stacked_quant_state_dict:
                 quant_states = stacked_quant_state_dict[param_name]
                 set_weight_attrs(param, {"bnb_quant_state": quant_states})
-
+                
                 pack_ratio = getattr(param, "pack_factor", -1)
                 if pack_ratio == -1:
                     raise ValueError(
@@ -909,6 +918,9 @@ class BitsAndBytesModelLoader(BaseModelLoader):
 
                 offsets = np.concatenate(([0], np.cumsum(num_elements)))
                 set_weight_attrs(param, {"bnb_shard_offsets": offsets})
+
+                if load_8bit:
+                    set_weight_attrs(param, {"matmul_state": [None]*len(quant_states)})
 
     def load_model(self, *, model_config: ModelConfig,
                    device_config: DeviceConfig,

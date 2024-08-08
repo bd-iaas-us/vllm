@@ -8,8 +8,6 @@ from vllm.model_executor.layers.linear import (LinearBase, LinearMethodBase,
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
-count = 0
-round = 0
 class BitsAndBytesConfig(QuantizationConfig):
     """Config class for BitsAndBytes Quantization.
 
@@ -122,23 +120,22 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
         from bitsandbytes.nn import Int8Params
         from bitsandbytes import  MatmulLtState
         if self.quant_config.load_in_8bit:
-            qweight = Parameter(torch.empty(sum(output_partition_sizes),
-                                       input_size_per_partition,
-                                       dtype=torch.int8,),
-                           requires_grad=False)     
+            # qweight = Parameter(torch.empty(sum(output_partition_sizes),
+            #                            input_size_per_partition,
+            #                            dtype=torch.int8,),
+            #                requires_grad=False)     
             qweight = Int8Params(data=torch.empty(sum(output_partition_sizes),
                                        input_size_per_partition,
                                        dtype=torch.int8,), 
-                                    has_fp16_weights=self.quant_config.has_fp16_weights, 
-                                    requires_grad=self.quant_config.has_fp16_weights,
+                                    has_fp16_weights=self.quant_config.llm_int8_has_fp16_weight, 
                                     requires_grad=False)
             
-            matmul_state = MatmulLtState()
-            matmul_state.threshold = self.quant_config.llm_int8_threshold
-            matmul_state.has_fp16_weights = self.quant_config.llm_int8_has_fp16_weight
-            matmul_state.is_training = False
-            if matmul_state.threshold > 0.0 and not matmul_state.has_fp16_weights:
-                matmul_state.use_pool = True
+            # matmul_state = MatmulLtState()
+            # matmul_state.threshold = self.quant_config.llm_int8_threshold
+            # matmul_state.has_fp16_weights = self.quant_config.llm_int8_has_fp16_weight
+            # matmul_state.is_training = False
+            # if matmul_state.threshold > 0.0 and not matmul_state.has_fp16_weights:
+            #     matmul_state.use_pool = True
             set_weight_attrs(
                 qweight,
                 {
@@ -146,7 +143,6 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
                     "output_dim": 0,
                     "pack_factor": 1,
                     "use_bitsandbytes_8bit": True,
-                    "matmul_state": matmul_state,
                 })
         else:
             quant_ratio = 0
@@ -202,18 +198,15 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
 
         # only load the bitsandbytes module when needed
         from bitsandbytes import matmul, MatmulLtState
-        
-        global count
-        global round
-        round += 1
-
+   
 
         original_type = x.dtype
         bf_x = x.to(torch.bfloat16)
 
         qweight = layer.qweight
-        quant_states = qweight.bnb_quant_state
         offsets = qweight.bnb_shard_offsets
+        quant_states = qweight.bnb_quant_state
+        matmul_states = qweight.matmul_state
 
         out_dim_0 = x.shape[0]
         out_dim_1 = sum(
@@ -223,47 +216,37 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
                           dtype=torch.float16,
                           device=x.device)
         
-        # state = MatmulLtState()
-        matmul_state = getattr(qweight, "matmul_state", None)
-
-        
         current_index = 0
         for i in range(len(quant_states)):
-            count += 1
             output_size = quant_states[i].shape[0]
             # weight = qweight[offsets[i]:offsets[i + 1]]
 
-            if matmul_state is None:
-                matmul_state = MatmulLtState()
-                matmul_state.CB = qweight[offsets[i]:offsets[i + 1]]
-                matmul_state.SCB = quant_states[i]
-                matmul_state.threshold = self.quant_config.llm_int8_threshold
-                matmul_state.has_fp16_weights = self.quant_config.llm_int8_has_fp16_weight
-                matmul_state.is_training = False
-                if matmul_state.threshold > 0.0 and not matmul_state.has_fp16_weights:
-                    matmul_state.use_pool = True
+            if matmul_states[i] is None:
+                matmul_states[i] = MatmulLtState()
+                matmul_states[i].CB = qweight[offsets[i]:offsets[i + 1]]
+                matmul_states[i].SCB = quant_states[i]
+                matmul_states[i].threshold = self.quant_config.llm_int8_threshold
+                matmul_states[i].has_fp16_weights = self.quant_config.llm_int8_has_fp16_weight
+                matmul_states[i].is_training = False
+                if matmul_states[i].threshold > 0.0 and not matmul_states[i].has_fp16_weights:
+                    matmul_states[i].use_pool = True
 
-            
-
-
-            
 
             new_x = x.unsqueeze(0)
             
-            intermediate_result = matmul(new_x, weight, state=state )
-            out[:, current_index:current_index + output_size] = intermediate_result[0]
+            out[:, current_index:current_index + output_size] = matmul(new_x, qweight[offsets[i]:offsets[i + 1]], state=matmul_states[i])
 
             current_index += output_size
 
-            if count > 224:
-                print(f"~~~~~~~{count-224}")
-
-            if not self.quant_config.llm_int8_has_fp16_weight and round > 128:
-                if state.CB is not None and state.CxB is not None:
+            #     gc.collect()
+            if not self.quant_config.llm_int8_has_fp16_weight: 
+                if matmul_states[i].CB is not None and matmul_states[i].CxB is not None:
                     # we converted 8-bit row major to turing/ampere format in the first inference pass
                     # we no longer need the row-major weight
-                    del state.CB
-                    layer.qweight[offsets[i]:offsets[i + 1]] = state.CxB
+                    del matmul_states[i].CB
+                    qweight[offsets[i]:offsets[i + 1]] = matmul_states[i].CxB
+                    # matmul_states[i] = matmul_state 
+                    # torch.cuda.empty_cache()
 
 
 
