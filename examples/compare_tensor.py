@@ -56,8 +56,8 @@ def print_comparison(result):
         print(result['values']['differing_indices'])
 
 def main():
-    tensor1 = load_tensor('/home/ubuntu/8bit_log/ret_transformer_19')
-    tensor2 = load_tensor('/home/ubuntu/8bit_log/ret_vllm_19')
+    tensor1 = load_tensor('/home/ubuntu/8bit_log/B_transformer_499')
+    tensor2 = load_tensor('/home/ubuntu/8bit_log/B_vllm_499')
 
     comparison_result = compare_tensors(tensor1, tensor2)
     print_comparison(comparison_result)

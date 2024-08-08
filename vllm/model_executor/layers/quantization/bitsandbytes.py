@@ -9,6 +9,7 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
 count = 0
+round = 0
 class BitsAndBytesConfig(QuantizationConfig):
     """Config class for BitsAndBytes Quantization.
 
@@ -118,20 +119,34 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
                        output_partition_sizes: List[int], input_size: int,
                        output_size: int, params_dtype: torch.dtype,
                        **extra_weight_attrs):
+        from bitsandbytes.nn import Int8Params
+        from bitsandbytes import  MatmulLtState
         if self.quant_config.load_in_8bit:
             qweight = Parameter(torch.empty(sum(output_partition_sizes),
                                        input_size_per_partition,
                                        dtype=torch.int8,),
                            requires_grad=False)     
+            qweight = Int8Params(data=torch.empty(sum(output_partition_sizes),
+                                       input_size_per_partition,
+                                       dtype=torch.int8,), 
+                                    has_fp16_weights=self.quant_config.has_fp16_weights, 
+                                    requires_grad=self.quant_config.has_fp16_weights,
+                                    requires_grad=False)
+            
+            matmul_state = MatmulLtState()
+            matmul_state.threshold = self.quant_config.llm_int8_threshold
+            matmul_state.has_fp16_weights = self.quant_config.llm_int8_has_fp16_weight
+            matmul_state.is_training = False
+            if matmul_state.threshold > 0.0 and not matmul_state.has_fp16_weights:
+                matmul_state.use_pool = True
             set_weight_attrs(
                 qweight,
                 {
                     "input_dim": 0,
-                    # In bitsandbytes_4bit, a tensor of shape [n,m] is quantized to
-                    #[n*m/pack_ratio, 1],so the output_dim is 0
                     "output_dim": 0,
                     "pack_factor": 1,
                     "use_bitsandbytes_8bit": True,
+                    "matmul_state": matmul_state,
                 })
         else:
             quant_ratio = 0
@@ -189,6 +204,8 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
         from bitsandbytes import matmul, MatmulLtState
         
         global count
+        global round
+        round += 1
 
 
         original_type = x.dtype
@@ -207,21 +224,29 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
                           device=x.device)
         
         # state = MatmulLtState()
+        matmul_state = getattr(qweight, "matmul_state", None)
+
         
         current_index = 0
         for i in range(len(quant_states)):
             count += 1
             output_size = quant_states[i].shape[0]
-            weight = qweight[offsets[i]:offsets[i + 1]]
+            # weight = qweight[offsets[i]:offsets[i + 1]]
 
-            state = MatmulLtState()
-            state.CB = weight
-            state.SCB = quant_states[i]
-            state.threshold = self.quant_config.llm_int8_threshold
-            state.has_fp16_weights = self.quant_config.llm_int8_has_fp16_weight
-            state.is_training = False
-            if state.threshold > 0.0 and not state.has_fp16_weights:
-                state.use_pool = True
+            if matmul_state is None:
+                matmul_state = MatmulLtState()
+                matmul_state.CB = qweight[offsets[i]:offsets[i + 1]]
+                matmul_state.SCB = quant_states[i]
+                matmul_state.threshold = self.quant_config.llm_int8_threshold
+                matmul_state.has_fp16_weights = self.quant_config.llm_int8_has_fp16_weight
+                matmul_state.is_training = False
+                if matmul_state.threshold > 0.0 and not matmul_state.has_fp16_weights:
+                    matmul_state.use_pool = True
+
+            
+
+
+            
 
             new_x = x.unsqueeze(0)
             
@@ -229,8 +254,17 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
             out[:, current_index:current_index + output_size] = intermediate_result[0]
 
             current_index += output_size
-            if count == 228:
-                print(f"~~~~~~~{count}")
+
+            if count > 224:
+                print(f"~~~~~~~{count-224}")
+
+            if not self.quant_config.llm_int8_has_fp16_weight and round > 128:
+                if state.CB is not None and state.CxB is not None:
+                    # we converted 8-bit row major to turing/ampere format in the first inference pass
+                    # we no longer need the row-major weight
+                    del state.CB
+                    layer.qweight[offsets[i]:offsets[i + 1]] = state.CxB
+
 
 
         #print(out.shape)
