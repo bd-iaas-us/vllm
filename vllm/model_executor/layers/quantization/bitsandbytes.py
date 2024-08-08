@@ -219,7 +219,6 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
         current_index = 0
         for i in range(len(quant_states)):
             output_size = quant_states[i].shape[0]
-            # weight = qweight[offsets[i]:offsets[i + 1]]
 
             if matmul_states[i] is None:
                 matmul_states[i] = MatmulLtState()
@@ -230,7 +229,6 @@ class BitsAndBytesLinearMethod(LinearMethodBase):
                 matmul_states[i].is_training = False
                 if matmul_states[i].threshold > 0.0 and not matmul_states[i].has_fp16_weights:
                     matmul_states[i].use_pool = True
-
 
             new_x = x.unsqueeze(0)
             
