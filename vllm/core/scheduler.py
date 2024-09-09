@@ -556,6 +556,10 @@ class Scheduler:
 
             running_queue.popleft()
 
+            pd_stage = os.environ.get("pd_separate_stage", "").lower()
+            if pd_stage == "prefill":
+                continue
+
             # With async postprocessor, an extra decode run is done
             # to process the final tokens. The check below avoids this extra
             # decode run when the model max len is reached, in order to avoid

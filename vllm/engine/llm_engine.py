@@ -3,6 +3,7 @@ import time
 from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+import os
 from typing import (TYPE_CHECKING, Any, ClassVar, Deque, Dict, Iterable, List,
                     Mapping, Optional)
 from typing import Sequence as GenericSequence
@@ -1264,6 +1265,10 @@ class LLMEngine:
         """
         now = time.time()
 
+        # prefill stage does not generate outputs
+        if os.environ.get("pd_separate_stage", "").lower() == "prefill":
+            return None
+
         if len(ctx.output_queue) == 0:
             return None
 
@@ -1599,7 +1604,8 @@ class LLMEngine:
             # Multi-step case
             return ctx.request_outputs
 
-        if not self.has_unfinished_requests():
+        if not self.has_unfinished_requests() and os.environ.get(
+                "pd_separate_stage", "").lower() != "prefill":
             # Drain async postprocessor (if exists)
             if len(ctx.output_queue) > 0:
                 self._process_model_outputs(ctx=ctx)
