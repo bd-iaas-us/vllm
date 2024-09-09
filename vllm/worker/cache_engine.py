@@ -8,6 +8,8 @@ from vllm.config import CacheConfig, DeviceConfig, ModelConfig, ParallelConfig
 from vllm.logger import init_logger
 from vllm.utils import (STR_DTYPE_TO_TORCH_DTYPE, get_dtype_size,
                         is_pin_memory_available)
+import cupy.cuda.runtime as runtime
+
 
 logger = init_logger(__name__)
 
@@ -86,6 +88,13 @@ class CacheEngine:
                             dtype=self.dtype,
                             pin_memory=pin_memory,
                             device=device))
+        if device == "cuda":
+            print(f"!!!Getting ipc handles, and checking if they are same!!, {kv_cache_shape}")
+            for i in range(len(kv_cache)-1):
+                handler1 = runtime.ipcGetMemHandle(kv_cache[i].data_ptr())
+                handler2 = runtime.ipcGetMemHandle(kv_cache[i+1].data_ptr())
+                if handler1 == handler2:
+                    raise Exception("WARNING!! ipc handle is same")
         return kv_cache
 
     def swap_in(self, src_to_dst: torch.Tensor) -> None:
