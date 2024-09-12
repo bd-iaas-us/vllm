@@ -8,17 +8,17 @@ import json
 model_name = "meta-llama/Meta-Llama-3-8B"
 
 prompts_1 = [
-    "Hello, my name is",
-    "The president of the United States is",
-    "The capital of France is",
+    # "Hello, my name is",
+    # "The president of the United States is",
+    # "The capital of France is",
     "The future of AI is",
 ]
 
 prompts_2 = [
-    "The capital of France is",
+    # "The capital of France is",
     "The future of AI is",
-    "Hello, my name is",
-    "The president of the United States is",
+    # "Hello, my name is",
+    # "The president of the United States is",
 ]
 
 # os.environ["VLLM_ATTENTION_BACKEND"] = "XFORMERS"
