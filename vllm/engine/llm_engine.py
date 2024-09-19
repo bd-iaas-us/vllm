@@ -61,6 +61,7 @@ from vllm.version import __version__ as VLLM_VERSION
 logger = init_logger(__name__)
 _LOCAL_LOGGING_INTERVAL_SEC = 5
 
+index = 0
 
 def _load_generation_config_dict(model_config: ModelConfig) -> Dict[str, Any]:
     config = try_get_generation_config(
@@ -902,12 +903,14 @@ class LLMEngine:
         """
         now = time.time()
 
-        # prefill stage does not generate outputs
-        if os.environ.get("pd_separate_stage", "").lower() == "prefill":
-            return None
+        global index
+        index += 1
+        if index % 16 == 0:
+            index = index
 
         if len(ctx.output_queue) == 0:
             return None
+    
 
         # Get pending async postprocessor
         if request_id:
@@ -947,6 +950,12 @@ class LLMEngine:
                 return
         else:
             indices = range(len(seq_group_metadata_list))  # type: ignore
+
+        # prefill stage return the results after just one iteriation
+        # if :
+        #     for output in ctx.output_queue:
+        #         ctx.request_outputs.append(output)
+        #     return None
 
         finished_before: List[int] = []
         finished_now: List[int] = []
@@ -997,7 +1006,7 @@ class LLMEngine:
                     self.output_processor.process_outputs(
                         seq_group, output, is_async)
 
-            if seq_group.is_finished():
+            if seq_group.is_finished() or os.environ.get("pd_separate_stage", "").lower() == "prefill":
                 finished_now.append(i)
 
         # Generate outputs for the requests that finished this iteration
@@ -1075,6 +1084,10 @@ class LLMEngine:
 
             # Tracing
             self.do_tracing(scheduler_outputs)
+
+
+
+        print("-------index", index)
 
         return None
 

@@ -5,6 +5,7 @@ from functools import partial
 from typing import (Any, AsyncGenerator, Callable, Dict, Iterable, List,
                     Mapping, Optional, Set, Tuple, Type, Union)
 from weakref import ReferenceType
+import os
 
 import vllm.envs as envs
 from vllm.config import (DecodingConfig, EngineConfig, LoRAConfig, ModelConfig,
@@ -31,7 +32,8 @@ from vllm.usage.usage_lib import UsageContext
 from vllm.utils import weak_bind
 
 logger = init_logger(__name__)
-ENGINE_ITERATION_TIMEOUT_S = envs.VLLM_ENGINE_ITERATION_TIMEOUT_S
+#ENGINE_ITERATION_TIMEOUT_S = envs.VLLM_ENGINE_ITERATION_TIMEOUT_S
+ENGINE_ITERATION_TIMEOUT_S = 1000
 
 
 class AsyncEngineDeadError(RuntimeError):
@@ -271,6 +273,8 @@ class _AsyncLLMEngine(LLMEngine):
         and updates the scheduler with the model outputs. Finally, it decodes
         the sequences and returns the newly generated results.
         """
+
+        pd_stage = os.environ.get("pd_separate_stage", "").lower()
         # these are cached outputs from previous iterations. None if on first
         # iteration
         cached_outputs = self.cached_scheduler_outputs[virtual_engine]
@@ -347,13 +351,25 @@ class _AsyncLLMEngine(LLMEngine):
             # be passed to the next iteration for PP.
             if self.scheduler_config.is_multi_step:
                 self._update_cached_scheduler_output(virtual_engine, outputs)
+            if pd_stage == "prefill":
+                ctx.append_output(outputs=outputs,
+                                  seq_group_metadata_list=seq_group_metadata_list,
+                                  scheduler_outputs=scheduler_outputs,
+                                  is_async=allow_async_output_proc,
+                                  is_last_step=True)
+                if len(ctx.output_queue) > 0:
+                    self._process_model_outputs(ctx=ctx)
+                outputs = []
+                return ctx.request_outputs
+
         else:
             if len(ctx.output_queue) > 0:
                 self._process_model_outputs(ctx=ctx)
             outputs = []
 
+        
         # Finish the current step for all the sequence groups.
-        if self.scheduler_config.is_multi_step:
+        if self.scheduler_config.is_multi_step or pd_stage == "prefill":
             for seq_group in seq_group_metadata_list:
                 seq_group.finish_step()
 
@@ -390,11 +406,14 @@ class _AsyncLLMEngine(LLMEngine):
             # Multi-step case
             return ctx.request_outputs
 
-        if not self.has_unfinished_requests():
+        pd_stage = os.environ.get("pd_separate_stage", "").lower()
+
+        if not self.has_unfinished_requests() and pd_stage != "prefill":
             # Drain async postprocessor (if exists)
             if len(ctx.output_queue) > 0:
                 self._process_model_outputs(ctx=ctx)
-            assert len(ctx.output_queue) == 0
+            
+                assert len(ctx.output_queue) == 0
 
         return ctx.request_outputs
 
@@ -684,7 +703,7 @@ class AsyncLLMEngine:
             # requests are finished
             all_finished = all(request_output.finished
                                for request_output in request_outputs)
-
+        # print("all_finished", all_finished)
         return not all_finished
 
     def process_request_outputs(self, request_outputs) -> bool:

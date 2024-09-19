@@ -116,11 +116,12 @@ class RequestOutput:
     @classmethod
     def from_seq_group(cls,
                        seq_group: SequenceGroup) -> Optional["RequestOutput"]:
+        import os
         sampling_params = seq_group.sampling_params
         if sampling_params is None:
             raise ValueError(
                 "Sampling parameters are missing for a CompletionRequest.")
-        finished = seq_group.is_finished()
+        finished = seq_group.is_finished() or os.environ.get("pd_separate_stage") == "prefill"
         if sampling_params.output_kind == RequestOutputKind.FINAL_ONLY and (
                 not finished):
             return None

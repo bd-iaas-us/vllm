@@ -59,6 +59,8 @@ import hashlib
 import math
 
 from infinity import InfinityConnection
+from vllm.attention.backends.flash_attn import FlashAttentionMetadata
+import torch
 
 
 class LlamaMLP(nn.Module):
@@ -343,68 +345,68 @@ class LlamaModel(nn.Module):
 
             print(f"Saved kv_cache for layer {layer_idx} ")
 
-    def save_prefill_hidden_states(self, input_ids: torch.Tensor,
-                                   attn_metadata: AttentionMetadata,
-                                   hidden_states: torch.Tensor, conn: InfinityConnection):
-        seq_index = 0
+    # def save_prefill_hidden_states(self, input_ids: torch.Tensor,
+    #                                attn_metadata: AttentionMetadata,
+    #                                hidden_states: torch.Tensor, conn: InfinityConnection):
+    #     seq_index = 0
 
-        for seq_length in attn_metadata.seq_lens_tensor:
-            sequence = input_ids[seq_index:seq_index + seq_length.item()]
-            seq_bytes = sequence.cpu().numpy().tobytes()
-            seq_hash = hashlib.sha256(seq_bytes).hexdigest()
-            folder_path = "/tmp/vllm_kv_cache_llama"
-            if os.path.exists(folder_path) == False:
-                os.makedirs(folder_path)
+    #     for seq_length in attn_metadata.seq_lens_tensor:
+    #         sequence = input_ids[seq_index:seq_index + seq_length.item()]
+    #         seq_bytes = sequence.cpu().numpy().tobytes()
+    #         seq_hash = hashlib.sha256(seq_bytes).hexdigest()
+    #         folder_path = "/tmp/vllm_kv_cache_llama"
+    #         if os.path.exists(folder_path) == False:
+    #             os.makedirs(folder_path)
 
-            # hash_key = f"{seq_hash}.hidden_states"
-            # conn.write_kvcache(hidden_states, hash_key, 0, hidden_states.numel())
-            # print(f"Writing hidden states, size {hidden_states.numel()*hidden_states.element_size()}")
+    #         # hash_key = f"{seq_hash}.hidden_states"
+    #         # conn.write_kvcache(hidden_states, hash_key, 0, hidden_states.numel())
+    #         # print(f"Writing hidden states, size {hidden_states.numel()*hidden_states.element_size()}")
 
-            file_name = f"{seq_hash}.hidden_states"
-            torch.save(hidden_states[seq_index:seq_index + seq_length, ...],
-                       os.path.join(folder_path, file_name))
-            seq_index += seq_length.item()
+    #         file_name = f"{seq_hash}.hidden_states"
+    #         torch.save(hidden_states[seq_index:seq_index + seq_length, ...],
+    #                    os.path.join(folder_path, file_name))
+    #         seq_index += seq_length.item()
 
-        print(f"Saved intermediate hidden states for prefilling")
+    #     print(f"Saved intermediate hidden states for prefilling")
 
-    def load_prefill_hidden_states(self, input_ids: torch.Tensor,
-                                   attn_metadata: AttentionMetadata,
-                                   hidden_states: torch.Tensor, conn: InfinityConnection):
+    # def load_prefill_hidden_states(self, input_ids: torch.Tensor,
+    #                                attn_metadata: AttentionMetadata,
+    #                                hidden_states: torch.Tensor, conn: InfinityConnection):
 
-        seq_index = 0
-        folder_path = "/tmp/vllm_kv_cache_llama"
+    #     seq_index = 0
+    #     folder_path = "/tmp/vllm_kv_cache_llama"
 
-        if not os.path.exists(folder_path):
-            raise FileNotFoundError(
-                f"KV cache folder does not exist: {folder_path}")
+    #     if not os.path.exists(folder_path):
+    #         raise FileNotFoundError(
+    #             f"KV cache folder does not exist: {folder_path}")
 
-        for seq_length in attn_metadata.seq_lens_tensor:
-            # Rebuild the sequence hash
-            sequence = input_ids[seq_index:seq_index + seq_length]
-            seq_bytes = sequence.cpu().numpy().tobytes()
-            seq_hash = hashlib.sha256(seq_bytes).hexdigest()
+    #     for seq_length in attn_metadata.seq_lens_tensor:
+    #         # Rebuild the sequence hash
+    #         sequence = input_ids[seq_index:seq_index + seq_length]
+    #         seq_bytes = sequence.cpu().numpy().tobytes()
+    #         seq_hash = hashlib.sha256(seq_bytes).hexdigest()
 
-            # hash_key = f"{seq_hash}.hidden_states" 
-            # conn.read_kvcache(hidden_states, hash_key, 0, hidden_states.numel())
+    #         # hash_key = f"{seq_hash}.hidden_states" 
+    #         # conn.read_kvcache(hidden_states, hash_key, 0, hidden_states.numel())
 
-            file_name = f"{seq_hash}.hidden_states"
-            hidden_states_path = os.path.join(folder_path, file_name)
+    #         file_name = f"{seq_hash}.hidden_states"
+    #         hidden_states_path = os.path.join(folder_path, file_name)
 
-            if not os.path.exists(hidden_states_path):
-                raise FileNotFoundError(
-                    f"Hidden states file does not exist: {hidden_states_path}")
+    #         if not os.path.exists(hidden_states_path):
+    #             raise FileNotFoundError(
+    #                 f"Hidden states file does not exist: {hidden_states_path}")
 
-            # Load the hidden states tensor and replace the relevant part in-place
-            loaded_hidden_states = torch.load(hidden_states_path)
-            hidden_states[seq_index:seq_index + seq_length,
-                          ...] = loaded_hidden_states
+    #         # Load the hidden states tensor and replace the relevant part in-place
+    #         loaded_hidden_states = torch.load(hidden_states_path)
+    #         hidden_states[seq_index:seq_index + seq_length,
+    #                       ...] = loaded_hidden_states
 
-            print(
-                f"Loaded hidden states for sequence {seq_index} to {seq_index + seq_length} "
-            )
+    #         print(
+    #             f"Loaded hidden states for sequence {seq_index} to {seq_index + seq_length} "
+    #         )
 
-            # Update the seq_index for the next sequence
-            seq_index += seq_length
+    #         # Update the seq_index for the next sequence
+    #         seq_index += seq_length
 
     def load_kv_caches(self, input_ids: torch.Tensor,
                        attn_metadata: AttentionMetadata, layer_idx: int,
@@ -417,8 +419,9 @@ class LlamaModel(nn.Module):
         k_or_v_cache_size = kv_cache[0].numel()
 
         for seq_length in attn_metadata.seq_lens_tensor:
+            seq_length = seq_length.item() -1
             # Rebuild the sequence hash
-            sequence = input_ids[seq_index:seq_index + seq_length.item()]
+            sequence = input_ids[seq_index:seq_index + seq_length]
             seq_bytes = sequence.cpu().numpy().tobytes()
             seq_hash = hashlib.sha256(seq_bytes).hexdigest()
 
@@ -434,7 +437,7 @@ class LlamaModel(nn.Module):
             conn.read_kvcache(kv_cache, v_cache_key, (page_index - page_count)*page_size+k_or_v_cache_size, page_count*page_size)
 
             page_index -= page_count
-            seq_index += seq_length.item()
+            seq_index += seq_length
 
             print(
                 f"Loaded and updated kv_cache for layer {layer_idx} "
@@ -469,34 +472,52 @@ class LlamaModel(nn.Module):
 
         first_decode_pass = False
         if pd_stage == "decode" and execute_run:
+            original_input_ids = input_ids.clone()
             if kv_caches is not None and len(
                     kv_caches) > 0 and kv_caches[0] is not None:
                 contain_nonzero = torch.any(kv_caches[0]).item()
                 first_decode_pass = not contain_nonzero
 
-        if first_decode_pass:
 
+        if pd_stage!= '' and execute_run:
             conn = InfinityConnection()
             conn.connect()
 
-            # TODO: we can return the hidden states firstto compute the next token
-            # and then load the kv caches in the next iteration. 
-            # This will allow us to overlap the computation of the next token with the loading of the kv caches
 
-            self.load_prefill_hidden_states(input_ids, attn_metadata,
-                                hidden_states, conn)
-
+        if first_decode_pass:
+            prefill_input_ids = original_input_ids[0:len(original_input_ids) - 1]
+            # make it return the block_table
             for i in range(self.start_layer, self.end_layer):
-                self.load_kv_caches(input_ids, attn_metadata, i,
+                self.load_kv_caches(prefill_input_ids, attn_metadata, i,
                                     kv_caches[i - self.start_layer], conn)
 
+            # make it return the block_table
+            # self.load_prefill_hidden_states(prefill_input_ids, attn_metadata,
+            #                     hidden_states, conn)
+            
+            input_ids = original_input_ids[-1:]
+            positions = positions[-1:]
+            hidden_states = hidden_states[-1:]
 
+            # Step 3: Create a new object with a mix of values
+            new_metadata = FlashAttentionMetadata(
+                seq_lens=attn_metadata.seq_lens,
+                seq_lens_tensor=attn_metadata.seq_lens_tensor,
+                max_query_len=1,  
+                max_prefill_seq_len=0,  
+                max_decode_seq_len=attn_metadata.max_prefill_seq_len,    
+                query_start_loc=torch.tensor([0, 1], device=hidden_states.device, dtype=torch.int32), 
+                seq_start_loc=attn_metadata.seq_start_loc, 
+                context_lens_tensor=attn_metadata.context_lens_tensor,  
+                block_tables=attn_metadata.block_tables,   # need to change
+                use_cuda_graph  =attn_metadata.use_cuda_graph,  
+                num_decode_tokens=1,
+                num_prefill_tokens=0,
+                num_prefills=0,
+                slot_mapping=attn_metadata.slot_mapping,
+            )
 
-            return hidden_states
-
-        if execute_run and pd_stage == "prefill":
-            conn = InfinityConnection()
-            conn.connect()
+            attn_metadata = new_metadata
 
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
@@ -521,9 +542,9 @@ class LlamaModel(nn.Module):
 
         hidden_states, _ = self.norm(hidden_states, residual)
 
-        if execute_run and pd_stage == "prefill":
-            self.save_prefill_hidden_states(input_ids, attn_metadata,
-                                            hidden_states, conn)
+        # if execute_run and pd_stage == "prefill":
+        #     self.save_prefill_hidden_states(input_ids, attn_metadata,
+        #                                     hidden_states, conn)
 
         return hidden_states
 
