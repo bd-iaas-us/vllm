@@ -439,9 +439,9 @@ class LlamaModel(nn.Module):
             page_index -= page_count
             seq_index += seq_length
 
-            print(
-                f"Loaded and updated kv_cache for layer {layer_idx} "
-            )
+            # print(
+            #     f"Loaded and updated kv_cache for layer {layer_idx} "
+            # )
 
     def forward(
         self,
@@ -499,6 +499,18 @@ class LlamaModel(nn.Module):
             positions = positions[-1:]
             hidden_states = hidden_states[-1:]
 
+            #hacking the block_table
+            block_count = kv_caches[0].shape[1]
+            block_tables = torch.tensor([[block_count-1]], dtype=torch.int32, device = attn_metadata.block_tables.device)
+
+            block_size = 16
+            pos = positions[0]
+            block_index = block_count - 1 - pos // block_size
+            token_index = pos % block_size
+            slot_number = block_index * block_size + token_index
+            slot_mapping = torch.tensor([slot_number], dtype=torch.int64, device = attn_metadata.slot_mapping.device)   
+            
+
             # Step 3: Create a new object with a mix of values
             new_metadata = FlashAttentionMetadata(
                 seq_lens=attn_metadata.seq_lens,
@@ -509,12 +521,12 @@ class LlamaModel(nn.Module):
                 query_start_loc=torch.tensor([0, 1], device=hidden_states.device, dtype=torch.int32), 
                 seq_start_loc=attn_metadata.seq_start_loc, 
                 context_lens_tensor=attn_metadata.context_lens_tensor,  
-                block_tables=attn_metadata.block_tables,   # need to change
+                block_tables=block_tables,   # need to change
                 use_cuda_graph  =attn_metadata.use_cuda_graph,  
                 num_decode_tokens=1,
                 num_prefill_tokens=0,
                 num_prefills=0,
-                slot_mapping=attn_metadata.slot_mapping,
+                slot_mapping=slot_mapping,
             )
 
             attn_metadata = new_metadata

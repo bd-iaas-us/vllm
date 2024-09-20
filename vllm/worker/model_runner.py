@@ -8,6 +8,7 @@ import weakref
 from dataclasses import dataclass
 from typing import (TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set,
                     Tuple, Type, TypeVar, Union)
+import os
 
 import numpy as np
 import torch
@@ -1619,9 +1620,50 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 hidden_or_intermediate_states.tensors["model_forward_time"] = (
                     torch.tensor(model_forward_time + orig_model_forward_time))
             return hidden_or_intermediate_states
+        
+        sample_mdata = model_input.sampling_metadata
+        if os.environ.get("pd_separate_stage", "").lower() == "decode" and torch.any(model_input.input_tokens != 0):
+            from vllm.sequence import SequenceData
+            from vllm.model_executor.sampling_metadata import SequenceGroupToSample
+
+            # modify the input for decoding stage
+            existing_sampling_metadata = model_input.sampling_metadata
+
+            new_seq_groups = []
+            for existing_seq_group in existing_sampling_metadata.seq_groups:
+                new_seq_data = {}
+                for name, data in existing_seq_group.seq_data.items():
+                    if isinstance(data, SequenceData):
+                        new_data = SequenceData(data._prompt_token_ids[:-1]) # remove the last token
+                        new_seq_data[name] = new_data
+
+                new_seq_group = SequenceGroupToSample(
+                    seq_ids=existing_seq_group.seq_ids,
+                    sampling_params=existing_seq_group.sampling_params,
+                    seq_data=new_seq_data, 
+                    seq_len=existing_seq_group.seq_len-1,
+                    query_len=existing_seq_group.query_len-1,
+                    is_prompt=existing_seq_group.is_prompt,
+                    prompt_logprob_indices=[],
+                    sample_indices=[0],
+                    generator=None,
+                )
+                new_seq_groups.append(new_seq_group)
+
+
+            sample_mdata = SamplingMetadata(
+                seq_groups=new_seq_groups,  # Keep the original seq_groups
+                # Subtract 1 from each value in the existing tensor
+                selected_token_indices=torch.tensor([0], device=existing_sampling_metadata.selected_token_indices.device), 
+                categorized_sample_indices=existing_sampling_metadata.categorized_sample_indices,  
+                num_prompts=existing_sampling_metadata.num_prompts,  # Keep the original num_prompts
+                skip_sampler_cpu_output=existing_sampling_metadata.skip_sampler_cpu_output,  # Keep original value
+                reuse_sampling_tensors=existing_sampling_metadata.reuse_sampling_tensors  # Keep original value
+            )
+
 
         logits = self.model.compute_logits(hidden_or_intermediate_states,
-                                           model_input.sampling_metadata)
+                                        sample_mdata)
 
         if not self.is_driver_worker:
             return []
@@ -1632,7 +1674,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # Sample the next token.
         output: SamplerOutput = self.model.sample(
             logits=logits,
-            sampling_metadata=model_input.sampling_metadata,
+            sampling_metadata=sample_mdata,
         )
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time
@@ -1653,8 +1695,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
         if self.return_hidden_states:
             # we only need to pass hidden states of most recent token
-            assert model_input.sampling_metadata is not None
-            indices = model_input.sampling_metadata.selected_token_indices
+            assert sample_mdata is not None
+            indices = sample_mdata.selected_token_indices
             if model_input.is_prompt:
                 hidden_states = hidden_or_intermediate_states.index_select(
                     0, indices)
