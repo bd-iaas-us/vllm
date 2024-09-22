@@ -1544,6 +1544,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         num_steps: int = 1,
     ) -> Optional[Union[List[SamplerOutput], IntermediateTensors]]:
+        
         if num_steps > 1:
             raise ValueError("num_steps > 1 is not supported in ModelRunner")
 
@@ -1622,7 +1623,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             return hidden_or_intermediate_states
         
         sample_mdata = model_input.sampling_metadata
-        if os.environ.get("pd_separate_stage", "").lower() == "decode" and torch.any(model_input.input_tokens != 0):
+        if os.environ.get("pd_separate_stage", "").lower() == "decode" and model_input.input_tokens.shape[-1] > 1 and torch.any(model_input.input_tokens != 0):
             from vllm.sequence import SequenceData
             from vllm.model_executor.sampling_metadata import SequenceGroupToSample
 
