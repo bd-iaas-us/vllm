@@ -311,70 +311,178 @@ class LlamaModel(nn.Module):
 
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.embed_tokens(input_ids)
-
+    
     def save_kv_caches(self, input_ids: torch.Tensor,
-                       attn_metadata: AttentionMetadata, layer_idx: int,
-                       kv_cache: torch.Tensor, conn: InfinityConnection):
-
+                   attn_metadata: AttentionMetadata, layer_idx: int,
+                   kv_cache: torch.Tensor, conn: InfinityConnection):
+    
         seq_index = 0
-        # somewhere defined
-        # find a way to get these values
-        tokens_per_page = 16
-        page_index = kv_cache.shape[1]
-        page_size = kv_cache[0][0].numel()
-        k_or_v_cache_size = kv_cache[0].numel()
+        tokens_per_page = 16  # Adjust this value as needed
+        page_size = kv_cache[0][0].numel()  # Number of elements in one page
+        k_or_v_cache_size = kv_cache[0].numel()  # Size of key or value cache per token
+        element_size = kv_cache.element_size()  # Size in bytes of one element in kv_cache
 
+          # Initialize the previous hash as an empty string
+        current_page_index = kv_cache.shape[1]  # Total number of pages in kv_cache
 
-        for seq_length in attn_metadata.seq_lens_tensor:
-            sequence = input_ids[seq_index:seq_index + seq_length.item()]
-            seq_bytes = sequence.cpu().numpy().tobytes()
-            seq_hash = hashlib.sha256(seq_bytes).hexdigest()
+        for seq_length_tensor in attn_metadata.seq_lens_tensor:
+            prev_hash = ""
 
-            page_count = math.ceil(seq_length / tokens_per_page)
-
-            k_cache_key = f"{seq_hash}_layer_{layer_idx}_k"
-            v_cache_key = f"{seq_hash}_layer_{layer_idx}_v"
-
-            print(f"Writing kv_cache for layer {layer_idx}, size {page_count*page_size*kv_cache.element_size()}")
-
-            conn.write_kvcache(kv_cache, k_cache_key, (page_index - page_count)*page_size, page_count*page_size)
-            conn.write_kvcache(kv_cache, v_cache_key, (page_index - page_count)*page_size+k_or_v_cache_size, page_count*page_size)
-
-            page_index -= page_count
-            seq_index += seq_length
-
-            print(f"Saved kv_cache for layer {layer_idx} ")
-
-    def load_kv_caches(self, input_ids: torch.Tensor,
-                       attn_metadata: AttentionMetadata, layer_idx: int,
-                       kv_cache: torch.Tensor, conn: InfinityConnection):
-
-        seq_index = 0
-        tokens_per_page = 16
-        page_index = kv_cache.shape[1]
-        page_size = kv_cache[0][0].numel()
-        k_or_v_cache_size = kv_cache[0].numel()
-
-        for seq_length in attn_metadata.seq_lens_tensor:
-            seq_length = seq_length.item() -1
-            # Rebuild the sequence hash
+            seq_length = seq_length_tensor.item()
             sequence = input_ids[seq_index:seq_index + seq_length]
-            seq_bytes = sequence.cpu().numpy().tobytes()
-            seq_hash = hashlib.sha256(seq_bytes).hexdigest()
+            seq_tokens = sequence.cpu().numpy()
 
-            # Calculate the number of pages that should be loaded
-            page_count = math.ceil(seq_length / tokens_per_page)
+            num_pages = math.ceil(seq_length / tokens_per_page)
 
-            k_cache_key = f"{seq_hash}_layer_{layer_idx}_k"
-            v_cache_key = f"{seq_hash}_layer_{layer_idx}_v"
+            for page_num in range(num_pages):
+                # Calculate the token indices for the current page
+                start_token = page_num * tokens_per_page
+                end_token = min((page_num + 1) * tokens_per_page, seq_length)
+                tokens_in_page = seq_tokens[start_token:end_token]
 
-            print(f"reading kv_cache for layer {layer_idx}, size {page_count*page_size*kv_cache.element_size()}")
+                # Compute the hash for the current page
+                tokens_bytes = tokens_in_page.tobytes()
+                hash_input = prev_hash.encode('utf-8') + tokens_bytes
+                current_hash = hashlib.sha256(hash_input).hexdigest()
 
-            conn.read_kvcache(kv_cache, k_cache_key, (page_index - page_count)*page_size, page_count*page_size)
-            conn.read_kvcache(kv_cache, v_cache_key, (page_index - page_count)*page_size+k_or_v_cache_size, page_count*page_size)
+                # Generate cache keys using the current hash
+                k_cache_key = f"{current_hash}_layer_{layer_idx}_k"
+                v_cache_key = f"{current_hash}_layer_{layer_idx}_v"
 
-            page_index -= page_count
-            seq_index += seq_length
+                print(f"Writing kv_cache for layer {layer_idx}, page {page_num}, size {page_size * element_size} bytes")
+
+                # Calculate the offset in the kv_cache for the current page
+                current_page_index -= 1  # Decrement the page index
+                page_offset = current_page_index * page_size
+
+                # Write the key cache
+                conn.write_kvcache(kv_cache, k_cache_key, page_offset, page_size)
+                # Write the value cache (offset by k_or_v_cache_size)
+                conn.write_kvcache(kv_cache, v_cache_key, page_offset + k_or_v_cache_size, page_size)
+
+                # Update the previous hash for the next page
+                prev_hash = current_hash
+
+            seq_index += seq_length  # Update sequence index for the next sequence
+
+            print(f"Saved kv_cache for layer {layer_idx}")
+    def load_kv_caches(self, input_ids: torch.Tensor,
+                   attn_metadata: AttentionMetadata, layer_idx: int,
+                   kv_cache: torch.Tensor, conn: InfinityConnection):
+
+        seq_index = 0
+        tokens_per_page = 16  # Should match the value used in save_kv_caches
+        page_size = kv_cache[0][0].numel()  # Number of elements in one page
+        k_or_v_cache_size = kv_cache[0].numel()  # Size of key or value cache per token
+        element_size = kv_cache.element_size()  # Size in bytes of one element in kv_cache
+        current_page_index = kv_cache.shape[1]  # Total number of pages in kv_cache
+
+        for seq_length_tensor in attn_metadata.seq_lens_tensor:
+            prev_hash = ""  # Initialize the previous hash as an empty string
+
+            seq_length = seq_length_tensor.item()
+            sequence = input_ids[seq_index:seq_index + seq_length]
+            seq_tokens = sequence.cpu().numpy()
+
+            num_pages = math.ceil(seq_length / tokens_per_page)
+
+            for page_num in range(num_pages):
+                # Calculate the token indices for the current page
+                start_token = page_num * tokens_per_page
+                end_token = min((page_num + 1) * tokens_per_page, seq_length)
+                tokens_in_page = seq_tokens[start_token:end_token]
+
+                # Compute the hash for the current page
+                tokens_bytes = tokens_in_page.tobytes()
+                hash_input = prev_hash.encode('utf-8') + tokens_bytes
+                current_hash = hashlib.sha256(hash_input).hexdigest()
+
+                # Generate cache keys using the current hash
+                k_cache_key = f"{current_hash}_layer_{layer_idx}_k"
+                v_cache_key = f"{current_hash}_layer_{layer_idx}_v"
+
+                print(f"Reading kv_cache for layer {layer_idx}, page {page_num}, size {page_size * element_size} bytes")
+
+                # Calculate the offset in the kv_cache for the current page
+                current_page_index -= 1  # Decrement the page index
+                page_offset = current_page_index * page_size
+
+                # Read the key cache
+                conn.read_kvcache(kv_cache, k_cache_key, page_offset, page_size)
+                # Read the value cache (offset by k_or_v_cache_size)
+                conn.read_kvcache(kv_cache, v_cache_key, page_offset + k_or_v_cache_size, page_size)
+
+                # Update the previous hash for the next page
+                prev_hash = current_hash
+
+            seq_index += seq_length  # Update sequence index for the next sequence
+
+            print(f"Loaded kv_cache for layer {layer_idx}")
+
+
+    # def save_kv_caches(self, input_ids: torch.Tensor,
+    #                    attn_metadata: AttentionMetadata, layer_idx: int,
+    #                    kv_cache: torch.Tensor, conn: InfinityConnection):
+
+    #     seq_index = 0
+    #     # somewhere defined
+    #     # find a way to get these values
+    #     tokens_per_page = 16
+    #     page_index = kv_cache.shape[1]
+    #     page_size = kv_cache[0][0].numel()
+    #     k_or_v_cache_size = kv_cache[0].numel()
+
+
+    #     for seq_length in attn_metadata.seq_lens_tensor:
+    #         sequence = input_ids[seq_index:seq_index + seq_length.item()]
+    #         seq_bytes = sequence.cpu().numpy().tobytes()
+    #         seq_hash = hashlib.sha256(seq_bytes).hexdigest()
+
+    #         page_count = math.ceil(seq_length / tokens_per_page)
+
+    #         k_cache_key = f"{seq_hash}_layer_{layer_idx}_k"
+    #         v_cache_key = f"{seq_hash}_layer_{layer_idx}_v"
+
+    #         print(f"Writing kv_cache for layer {layer_idx}, size {page_count*page_size*kv_cache.element_size()}")
+
+    #         conn.write_kvcache(kv_cache, k_cache_key, (page_index - page_count)*page_size, page_count*page_size)
+    #         conn.write_kvcache(kv_cache, v_cache_key, (page_index - page_count)*page_size+k_or_v_cache_size, page_count*page_size)
+
+    #         page_index -= page_count
+    #         seq_index += seq_length
+
+    #         print(f"Saved kv_cache for layer {layer_idx} ")
+
+    # def load_kv_caches(self, input_ids: torch.Tensor,
+    #                    attn_metadata: AttentionMetadata, layer_idx: int,
+    #                    kv_cache: torch.Tensor, conn: InfinityConnection):
+
+    #     seq_index = 0
+    #     tokens_per_page = 16
+    #     page_index = kv_cache.shape[1]
+    #     page_size = kv_cache[0][0].numel()
+    #     k_or_v_cache_size = kv_cache[0].numel()
+
+    #     for seq_length in attn_metadata.seq_lens_tensor:
+    #         seq_length = seq_length.item() -1
+    #         # Rebuild the sequence hash
+    #         sequence = input_ids[seq_index:seq_index + seq_length]
+    #         seq_bytes = sequence.cpu().numpy().tobytes()
+    #         seq_hash = hashlib.sha256(seq_bytes).hexdigest()
+
+    #         # Calculate the number of pages that should be loaded
+    #         page_count = math.ceil(seq_length / tokens_per_page)
+
+    #         k_cache_key = f"{seq_hash}_layer_{layer_idx}_k"
+    #         v_cache_key = f"{seq_hash}_layer_{layer_idx}_v"
+
+    #         print(f"reading kv_cache for layer {layer_idx}, size {page_count*page_size*kv_cache.element_size()}")
+
+    #         conn.read_kvcache(kv_cache, k_cache_key, (page_index - page_count)*page_size, page_count*page_size)
+    #         conn.read_kvcache(kv_cache, v_cache_key, (page_index - page_count)*page_size+k_or_v_cache_size, page_count*page_size)
+
+    #         page_index -= page_count
+    #         seq_index += seq_length
 
 
     def forward(
@@ -441,8 +549,6 @@ class LlamaModel(nn.Module):
             slot_number = block_index * block_size + token_index
             slot_mapping = torch.tensor([slot_number], dtype=torch.int64, device = attn_metadata.slot_mapping.device)   
             
-
-            # Step 3: Create a new object with a mix of values
             new_metadata = FlashAttentionMetadata(
                 seq_lens=attn_metadata.seq_lens,
                 seq_lens_tensor=attn_metadata.seq_lens_tensor,
