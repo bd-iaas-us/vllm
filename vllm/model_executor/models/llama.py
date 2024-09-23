@@ -322,9 +322,6 @@ class LlamaModel(nn.Module):
         k_or_v_cache_size = kv_cache[0].numel()  # Size of key or value cache per token
         element_size = kv_cache.element_size()  # Size in bytes of one element in kv_cache
 
-          # Initialize the previous hash as an empty string
-        current_page_index = kv_cache.shape[1]  # Total number of pages in kv_cache
-
         for seq_length_tensor in attn_metadata.seq_lens_tensor:
             prev_hash = ""
 
@@ -352,8 +349,7 @@ class LlamaModel(nn.Module):
                 print(f"Writing kv_cache for layer {layer_idx}, page {page_num}, size {page_size * element_size} bytes")
 
                 # Calculate the offset in the kv_cache for the current page
-                current_page_index -= 1  # Decrement the page index
-                page_offset = current_page_index * page_size
+                page_offset = attn_metadata.slot_mapping[page_num*tokens_per_page].item() // tokens_per_page * page_size
 
                 # Write the key cache
                 conn.write_kvcache(kv_cache, k_cache_key, page_offset, page_size)
@@ -366,6 +362,7 @@ class LlamaModel(nn.Module):
             seq_index += seq_length  # Update sequence index for the next sequence
 
             print(f"Saved kv_cache for layer {layer_idx}")
+
     def load_kv_caches(self, input_ids: torch.Tensor,
                    attn_metadata: AttentionMetadata, layer_idx: int,
                    kv_cache: torch.Tensor, conn: InfinityConnection):
@@ -375,8 +372,8 @@ class LlamaModel(nn.Module):
         page_size = kv_cache[0][0].numel()  # Number of elements in one page
         k_or_v_cache_size = kv_cache[0].numel()  # Size of key or value cache per token
         element_size = kv_cache.element_size()  # Size in bytes of one element in kv_cache
-        current_page_index = kv_cache.shape[1]  # Total number of pages in kv_cache
 
+        idx = 0
         for seq_length_tensor in attn_metadata.seq_lens_tensor:
             prev_hash = ""  # Initialize the previous hash as an empty string
 
@@ -401,11 +398,10 @@ class LlamaModel(nn.Module):
                 k_cache_key = f"{current_hash}_layer_{layer_idx}_k"
                 v_cache_key = f"{current_hash}_layer_{layer_idx}_v"
 
-                print(f"Reading kv_cache for layer {layer_idx}, page {page_num}, size {page_size * element_size} bytes")
+                # print(f"Reading kv_cache for layer {layer_idx}, page {page_num}, size {page_size * element_size} bytes")
 
                 # Calculate the offset in the kv_cache for the current page
-                current_page_index -= 1  # Decrement the page index
-                page_offset = current_page_index * page_size
+                page_offset = attn_metadata.slot_mapping[page_num*tokens_per_page].item() // tokens_per_page * page_size
 
                 # Read the key cache
                 conn.read_kvcache(kv_cache, k_cache_key, page_offset, page_size)
@@ -416,73 +412,9 @@ class LlamaModel(nn.Module):
                 prev_hash = current_hash
 
             seq_index += seq_length  # Update sequence index for the next sequence
+            idx += 1
 
             print(f"Loaded kv_cache for layer {layer_idx}")
-
-
-    # def save_kv_caches(self, input_ids: torch.Tensor,
-    #                    attn_metadata: AttentionMetadata, layer_idx: int,
-    #                    kv_cache: torch.Tensor, conn: InfinityConnection):
-
-    #     seq_index = 0
-    #     # somewhere defined
-    #     # find a way to get these values
-    #     tokens_per_page = 16
-    #     page_index = kv_cache.shape[1]
-    #     page_size = kv_cache[0][0].numel()
-    #     k_or_v_cache_size = kv_cache[0].numel()
-
-
-    #     for seq_length in attn_metadata.seq_lens_tensor:
-    #         sequence = input_ids[seq_index:seq_index + seq_length.item()]
-    #         seq_bytes = sequence.cpu().numpy().tobytes()
-    #         seq_hash = hashlib.sha256(seq_bytes).hexdigest()
-
-    #         page_count = math.ceil(seq_length / tokens_per_page)
-
-    #         k_cache_key = f"{seq_hash}_layer_{layer_idx}_k"
-    #         v_cache_key = f"{seq_hash}_layer_{layer_idx}_v"
-
-    #         print(f"Writing kv_cache for layer {layer_idx}, size {page_count*page_size*kv_cache.element_size()}")
-
-    #         conn.write_kvcache(kv_cache, k_cache_key, (page_index - page_count)*page_size, page_count*page_size)
-    #         conn.write_kvcache(kv_cache, v_cache_key, (page_index - page_count)*page_size+k_or_v_cache_size, page_count*page_size)
-
-    #         page_index -= page_count
-    #         seq_index += seq_length
-
-    #         print(f"Saved kv_cache for layer {layer_idx} ")
-
-    # def load_kv_caches(self, input_ids: torch.Tensor,
-    #                    attn_metadata: AttentionMetadata, layer_idx: int,
-    #                    kv_cache: torch.Tensor, conn: InfinityConnection):
-
-    #     seq_index = 0
-    #     tokens_per_page = 16
-    #     page_index = kv_cache.shape[1]
-    #     page_size = kv_cache[0][0].numel()
-    #     k_or_v_cache_size = kv_cache[0].numel()
-
-    #     for seq_length in attn_metadata.seq_lens_tensor:
-    #         seq_length = seq_length.item() -1
-    #         # Rebuild the sequence hash
-    #         sequence = input_ids[seq_index:seq_index + seq_length]
-    #         seq_bytes = sequence.cpu().numpy().tobytes()
-    #         seq_hash = hashlib.sha256(seq_bytes).hexdigest()
-
-    #         # Calculate the number of pages that should be loaded
-    #         page_count = math.ceil(seq_length / tokens_per_page)
-
-    #         k_cache_key = f"{seq_hash}_layer_{layer_idx}_k"
-    #         v_cache_key = f"{seq_hash}_layer_{layer_idx}_v"
-
-    #         print(f"reading kv_cache for layer {layer_idx}, size {page_count*page_size*kv_cache.element_size()}")
-
-    #         conn.read_kvcache(kv_cache, k_cache_key, (page_index - page_count)*page_size, page_count*page_size)
-    #         conn.read_kvcache(kv_cache, v_cache_key, (page_index - page_count)*page_size+k_or_v_cache_size, page_count*page_size)
-
-    #         page_index -= page_count
-    #         seq_index += seq_length
 
 
     def forward(
@@ -494,6 +426,8 @@ class LlamaModel(nn.Module):
         intermediate_tensors: Optional[IntermediateTensors],
         inputs_embeds: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        
+        print("~~~~~~~~~~Running input_ids", input_ids)
 
         # profile_run will send in an all-zero input_ids tensor
         execute_run = torch.any(input_ids != 0).item()
@@ -538,17 +472,14 @@ class LlamaModel(nn.Module):
             positions = positions[-1:]
             hidden_states = hidden_states[-1:]
 
-            #hacking the block_table
-            block_count = kv_caches[0].shape[1]
-            block_tables = torch.tensor([[block_count-1]], dtype=torch.int32, device = attn_metadata.block_tables.device)
+            page_size =16
+            indices = torch.arange(0, attn_metadata.slot_mapping.size(0), page_size)
+            block_tables =  attn_metadata.slot_mapping[indices] //page_size
+            block_tables = block_tables.unsqueeze(0)
+            block_tables = block_tables.to(dtype=torch.int32, device=attn_metadata.block_tables.device)
+            # last_block_index = attn_metadata.slot_mapping[-1]//page_size
+            # block_tables = torch.tensor([[last_block_index]], dtype=torch.int32, device = attn_metadata.block_tables.device)
 
-            block_size = 16
-            pos = positions[0]
-            block_index = block_count - 1 - pos // block_size
-            token_index = pos % block_size
-            slot_number = block_index * block_size + token_index
-            slot_mapping = torch.tensor([slot_number], dtype=torch.int64, device = attn_metadata.slot_mapping.device)   
-            
             new_metadata = FlashAttentionMetadata(
                 seq_lens=attn_metadata.seq_lens,
                 seq_lens_tensor=attn_metadata.seq_lens_tensor,
@@ -557,13 +488,13 @@ class LlamaModel(nn.Module):
                 max_decode_seq_len=attn_metadata.max_prefill_seq_len,    
                 query_start_loc=torch.tensor([0, 1], device=hidden_states.device, dtype=torch.int32), 
                 seq_start_loc=attn_metadata.seq_start_loc, 
-                context_lens_tensor=attn_metadata.context_lens_tensor,  
+                context_lens_tensor=torch.tensor([attn_metadata.max_prefill_seq_len-1], dtype=attn_metadata.context_lens_tensor.dtype, device = attn_metadata.context_lens_tensor.device),  
                 block_tables=block_tables,   # need to change
                 use_cuda_graph  =attn_metadata.use_cuda_graph,  
                 num_decode_tokens=1,
                 num_prefill_tokens=0,
                 num_prefills=0,
-                slot_mapping=slot_mapping,
+                slot_mapping=attn_metadata.slot_mapping[-1:],
             )
 
             attn_metadata = new_metadata

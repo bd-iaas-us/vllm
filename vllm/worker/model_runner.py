@@ -1653,11 +1653,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
 
             sample_mdata = SamplingMetadata(
-                seq_groups=new_seq_groups,  # Keep the original seq_groups
-                # Subtract 1 from each value in the existing tensor
+                seq_groups=new_seq_groups, 
                 selected_token_indices=torch.tensor([0], device=existing_sampling_metadata.selected_token_indices.device), 
                 categorized_sample_indices=existing_sampling_metadata.categorized_sample_indices,  
-                num_prompts=existing_sampling_metadata.num_prompts,  # Keep the original num_prompts
+                num_prompts=0,
                 skip_sampler_cpu_output=existing_sampling_metadata.skip_sampler_cpu_output,  # Keep original value
                 reuse_sampling_tensors=existing_sampling_metadata.reuse_sampling_tensors  # Keep original value
             )

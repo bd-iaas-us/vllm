@@ -1085,10 +1085,6 @@ class LLMEngine:
             # Tracing
             self.do_tracing(scheduler_outputs)
 
-
-
-        print("-------index", index)
-
         return None
 
     def _advance_to_next_step(
