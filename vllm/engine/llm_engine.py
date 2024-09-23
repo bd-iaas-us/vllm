@@ -61,8 +61,6 @@ from vllm.version import __version__ as VLLM_VERSION
 logger = init_logger(__name__)
 _LOCAL_LOGGING_INTERVAL_SEC = 5
 
-index = 0
-
 def _load_generation_config_dict(model_config: ModelConfig) -> Dict[str, Any]:
     config = try_get_generation_config(
         model_config.model,
@@ -903,15 +901,9 @@ class LLMEngine:
         """
         now = time.time()
 
-        global index
-        index += 1
-        if index % 16 == 0:
-            index = index
-
         if len(ctx.output_queue) == 0:
             return None
     
-
         # Get pending async postprocessor
         if request_id:
             # When we process only one request, no pop is required
@@ -950,12 +942,6 @@ class LLMEngine:
                 return
         else:
             indices = range(len(seq_group_metadata_list))  # type: ignore
-
-        # prefill stage return the results after just one iteriation
-        # if :
-        #     for output in ctx.output_queue:
-        #         ctx.request_outputs.append(output)
-        #     return None
 
         finished_before: List[int] = []
         finished_now: List[int] = []
@@ -1006,7 +992,7 @@ class LLMEngine:
                     self.output_processor.process_outputs(
                         seq_group, output, is_async)
 
-            if seq_group.is_finished() or os.environ.get("pd_separate_stage", "").lower() == "prefill":
+            if seq_group.is_finished():
                 finished_now.append(i)
 
         # Generate outputs for the requests that finished this iteration
@@ -1295,8 +1281,7 @@ class LLMEngine:
             # Multi-step case
             return ctx.request_outputs
 
-        if not self.has_unfinished_requests() and os.environ.get(
-                "pd_separate_stage", "").lower() != "prefill":
+        if not self.has_unfinished_requests():
             # Drain async postprocessor (if exists)
             if len(ctx.output_queue) > 0:
                 self._process_model_outputs(ctx=ctx)

@@ -351,17 +351,6 @@ class _AsyncLLMEngine(LLMEngine):
             # be passed to the next iteration for PP.
             if self.scheduler_config.is_multi_step:
                 self._update_cached_scheduler_output(virtual_engine, outputs)
-            if pd_stage == "prefill":
-                ctx.append_output(outputs=outputs,
-                                  seq_group_metadata_list=seq_group_metadata_list,
-                                  scheduler_outputs=scheduler_outputs,
-                                  is_async=allow_async_output_proc,
-                                  is_last_step=True)
-                if len(ctx.output_queue) > 0:
-                    self._process_model_outputs(ctx=ctx)
-                outputs = []
-                return ctx.request_outputs
-
         else:
             if len(ctx.output_queue) > 0:
                 self._process_model_outputs(ctx=ctx)
@@ -369,7 +358,7 @@ class _AsyncLLMEngine(LLMEngine):
 
         
         # Finish the current step for all the sequence groups.
-        if self.scheduler_config.is_multi_step or pd_stage == "prefill":
+        if self.scheduler_config.is_multi_step:
             for seq_group in seq_group_metadata_list:
                 seq_group.finish_step()
 
@@ -406,9 +395,7 @@ class _AsyncLLMEngine(LLMEngine):
             # Multi-step case
             return ctx.request_outputs
 
-        pd_stage = os.environ.get("pd_separate_stage", "").lower()
-
-        if not self.has_unfinished_requests() and pd_stage != "prefill":
+        if not self.has_unfinished_requests():
             # Drain async postprocessor (if exists)
             if len(ctx.output_queue) > 0:
                 self._process_model_outputs(ctx=ctx)

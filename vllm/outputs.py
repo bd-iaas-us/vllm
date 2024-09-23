@@ -121,7 +121,7 @@ class RequestOutput:
         if sampling_params is None:
             raise ValueError(
                 "Sampling parameters are missing for a CompletionRequest.")
-        finished = seq_group.is_finished() or os.environ.get("pd_separate_stage") == "prefill"
+        finished = seq_group.is_finished()
         if sampling_params.output_kind == RequestOutputKind.FINAL_ONLY and (
                 not finished):
             return None
