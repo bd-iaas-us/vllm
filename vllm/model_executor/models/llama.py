@@ -320,7 +320,6 @@ class LlamaModel(nn.Module):
         tokens_per_page = 16  # Adjust this value as needed
         page_size = kv_cache[0][0].numel()  # Number of elements in one page
         k_or_v_cache_size = kv_cache[0].numel()  # Size of key or value cache per token
-        element_size = kv_cache.element_size()  # Size in bytes of one element in kv_cache
 
         for seq_length_tensor in attn_metadata.seq_lens_tensor:
             prev_hash = ""
@@ -330,6 +329,8 @@ class LlamaModel(nn.Module):
             seq_tokens = sequence.cpu().numpy()
 
             num_pages = math.ceil(seq_length / tokens_per_page)
+
+            block_offsets = []
 
             for page_num in range(num_pages):
                 # Calculate the token indices for the current page
@@ -346,22 +347,23 @@ class LlamaModel(nn.Module):
                 k_cache_key = f"{current_hash}_layer_{layer_idx}_k"
                 v_cache_key = f"{current_hash}_layer_{layer_idx}_v"
 
-                print(f"Writing kv_cache for layer {layer_idx}, page {page_num}, size {page_size * element_size} bytes")
-
                 # Calculate the offset in the kv_cache for the current page
                 page_offset = attn_metadata.slot_mapping[page_num*tokens_per_page].item() // tokens_per_page * page_size
 
-                # Write the key cache
-                conn.write_kvcache(kv_cache, k_cache_key, page_offset, page_size)
-                # Write the value cache (offset by k_or_v_cache_size)
-                conn.write_kvcache(kv_cache, v_cache_key, page_offset + k_or_v_cache_size, page_size)
+                block_offsets.append((k_cache_key, page_offset))
+                block_offsets.append((v_cache_key, page_offset + k_or_v_cache_size))
 
                 # Update the previous hash for the next page
                 prev_hash = current_hash
 
+                print(f"write: layer {layer_idx} page {page_num} k_cache_key {k_cache_key} v_cache_key {v_cache_key}")
+
+            # write to cache
+            conn.write_kvcache(kv_cache, block_offsets, page_size)
+                               
             seq_index += seq_length  # Update sequence index for the next sequence
 
-            print(f"Saved kv_cache for layer {layer_idx}")
+            # print(f"Saved kv_cache for layer {layer_idx}")
 
     def load_kv_caches(self, input_ids: torch.Tensor,
                    attn_metadata: AttentionMetadata, layer_idx: int,
@@ -371,9 +373,8 @@ class LlamaModel(nn.Module):
         tokens_per_page = 16  # Should match the value used in save_kv_caches
         page_size = kv_cache[0][0].numel()  # Number of elements in one page
         k_or_v_cache_size = kv_cache[0].numel()  # Size of key or value cache per token
-        element_size = kv_cache.element_size()  # Size in bytes of one element in kv_cache
 
-        idx = 0
+        block_offsets = []
         for seq_length_tensor in attn_metadata.seq_lens_tensor:
             prev_hash = ""  # Initialize the previous hash as an empty string
 
@@ -398,21 +399,19 @@ class LlamaModel(nn.Module):
                 k_cache_key = f"{current_hash}_layer_{layer_idx}_k"
                 v_cache_key = f"{current_hash}_layer_{layer_idx}_v"
 
-                # print(f"Reading kv_cache for layer {layer_idx}, page {page_num}, size {page_size * element_size} bytes")
-
-                # Calculate the offset in the kv_cache for the current page
+               # Calculate the offset in the kv_cache for the current page
                 page_offset = attn_metadata.slot_mapping[page_num*tokens_per_page].item() // tokens_per_page * page_size
 
-                # Read the key cache
-                conn.read_kvcache(kv_cache, k_cache_key, page_offset, page_size)
-                # Read the value cache (offset by k_or_v_cache_size)
-                conn.read_kvcache(kv_cache, v_cache_key, page_offset + k_or_v_cache_size, page_size)
+                block_offsets.append((k_cache_key, page_offset))
+                block_offsets.append((v_cache_key, page_offset + k_or_v_cache_size))
 
                 # Update the previous hash for the next page
                 prev_hash = current_hash
 
+                print(f"read: layer {layer_idx} page {page_num} k_cache_key {k_cache_key} v_cache_key {v_cache_key}")
+
+            conn.read_kvcache(kv_cache, block_offsets, page_size)
             seq_index += seq_length  # Update sequence index for the next sequence
-            idx += 1
 
             print(f"Loaded kv_cache for layer {layer_idx}")
 
@@ -520,6 +519,9 @@ class LlamaModel(nn.Module):
             })
 
         hidden_states, _ = self.norm(hidden_states, residual)
+
+        if first_decode_pass or prefill_execute_run:
+            conn.sync_local()
 
         return hidden_states
 
