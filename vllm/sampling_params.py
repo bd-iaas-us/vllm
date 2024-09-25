@@ -3,6 +3,7 @@ import copy
 from enum import Enum, IntEnum
 from functools import cached_property
 from typing import Any, Callable, Dict, List, Optional, Set, Union
+import os
 
 import msgspec
 import torch
@@ -337,6 +338,13 @@ class SamplingParams(
         if self.best_of != self.n and self.output_kind == (
                 RequestOutputKind.DELTA):
             raise ValueError("best_of must equal n to use output_kind=DELTA")
+        
+        if os.environ.get("pd_separate_stage", "").lower() == "prefill":
+            if self.max_tokens is None or self.max_tokens != 1:
+                logger.warning("Prefill run only generates one token. "
+                               "max_tokens is set to 1.")   
+                
+            self.max_tokens = 1
 
     def _verify_beam_search(self) -> None:
         if self.best_of == 1:

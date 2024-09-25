@@ -293,9 +293,9 @@ class MQLLMEngineClient:
         if socket.closed:
             raise MQClientClosedError()
 
-        if await socket.poll(timeout=VLLM_RPC_TIMEOUT) == 0:
-            raise TimeoutError("MQLLMEngine didn't reply within "
-                               f"{VLLM_RPC_TIMEOUT}ms")
+        # if await socket.poll(timeout=VLLM_RPC_TIMEOUT) == 0:
+        #     raise TimeoutError("MQLLMEngine didn't reply within "
+        #                        f"{VLLM_RPC_TIMEOUT}ms")
 
         await self._check_success(error_message, socket)
 

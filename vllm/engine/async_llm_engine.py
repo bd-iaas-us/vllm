@@ -31,7 +31,9 @@ from vllm.usage.usage_lib import UsageContext
 from vllm.utils import weak_bind
 
 logger = init_logger(__name__)
-ENGINE_ITERATION_TIMEOUT_S = envs.VLLM_ENGINE_ITERATION_TIMEOUT_S
+# ENGINE_ITERATION_TIMEOUT_S = envs.VLLM_ENGINE_ITERATION_TIMEOUT_S
+
+ENGINE_ITERATION_TIMEOUT_S = 1000
 
 
 class AsyncEngineDeadError(RuntimeError):

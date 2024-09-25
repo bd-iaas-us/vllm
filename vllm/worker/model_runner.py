@@ -55,6 +55,11 @@ from vllm.worker.model_runner_base import (
     _init_attn_metadata_from_tensor_dict,
     _init_sampling_metadata_from_tensor_dict, dump_input_when_exception)
 
+from vllm.distributed.kv_transfer.utils import is_first_decode_pass, is_prefill_run
+from infinity import InfinityConnection
+from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
+from vllm.distributed.kv_transfer.infinite import InfiniStoreKVCacheTransporter 
+
 if TYPE_CHECKING:
     from vllm.attention.backends.abstract import AttentionBackend
 
@@ -1533,6 +1538,13 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                                    sampling_metadata=sampling_metadata,
                                    is_prompt=is_prompt,
                                    virtual_engine=virtual_engine)
+    
+    def get_kv_cache_transporter(self, input_ids, attn_metadata) -> Optional[KVCacheTransporterBase]:
+        if is_prefill_run(input_ids) or is_first_decode_pass(input_ids, attn_metadata):
+            return InfiniStoreKVCacheTransporter(self.model_config.model)
+        
+        return None
+
 
     @torch.inference_mode()
     @dump_input_when_exception(exclude_args=[0], exclude_kwargs=["self"])
@@ -1595,7 +1607,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             intermediate_tensors=intermediate_tensors,
             **MultiModalInputs.as_kwargs(multi_modal_kwargs,
                                          device=self.device),
-            **seqlen_agnostic_kwargs)
+            **seqlen_agnostic_kwargs,
+            kv_cache_transporter = self.get_kv_cache_transporter(model_input.input_tokens, model_input.attn_metadata ))
 
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):
