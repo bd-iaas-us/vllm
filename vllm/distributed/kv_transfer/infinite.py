@@ -25,6 +25,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         self.model = model
         self.tokens_per_page = tokens_per_page
 
+        # TODO: when server is local, use connection_type=infinistore.TYPE_GPU, otherwise RDMA
+
         infinite_server = os.environ.get("INFINITE_STORE_SERVER", Default_Infinite_Server)
         infinite_server = infinite_server.strip('"')
         infinte_config = infinistore.ClientConfig(
@@ -142,6 +144,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         seq_index = 0
 
+        # TODO: self.conn.write_cache called only once
         for seq_length_tensor in attn_metadata.seq_lens_tensor:
             seq_length = seq_length_tensor.item()
             block_offsets, page_size = self._compute_kv_cache_block_offsets(
@@ -150,7 +153,10 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
             # Write to cache
             try:
+                import time
+                start = time.time()
                 self.conn.write_cache(kv_cache, block_offsets, page_size)
+                logger.info("tocheck: ~~~~~~~~ write_cache time: %s", time.time() - start)
             except Exception as e:
                 logger.error("Failed to write kv_cache: %s", e)
                 raise
