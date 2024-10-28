@@ -46,6 +46,10 @@ from .interfaces import SupportsPP
 from .utils import (is_pp_missing_parameter,
                     make_empty_intermediate_tensors_factory, make_layers)
 
+import time
+from vllm.logger import init_logger
+logger = init_logger(__name__)
+
 
 class OPTLearnedPositionalEmbedding(nn.Embedding):
 
@@ -277,14 +281,23 @@ class OPTDecoder(nn.Module):
             hidden_states = intermediate_tensors["hidden_states"]
 
         if first_decode_pass:
+            start = time.time()
             for i, kv_cache in enumerate(kv_caches):
                 kv_cache_transporter.read_kv_cache(input_ids, attn_metadata, i,
                                                    kv_cache)
+            logger.info(f"Qian ~~~~~~~ Decode: Read kv cache time: {time.time() - start}")
 
+            start = time.time()
             kv_cache_transporter.read_hidden_states(input_ids, attn_metadata,
                                                     hidden_states)
+            
+            logger.info(f"Qian ~~~~~~~ Decode: Read hidden states: {time.time() - start}")
+
+            start = time.time()
 
             kv_cache_transporter.synchronize()
+
+            logger.info(f"Qian ~~~~~~~ Decode: Synchronize: {time.time() - start}")
 
             return hidden_states
 
@@ -295,9 +308,13 @@ class OPTDecoder(nn.Module):
                                   attn_metadata)
             
             if prefill_pass:
+                start = time.time()
+                logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i}")
                 kv_cache_transporter.save_kv_cache(
                     input_ids, attn_metadata, i,
                     kv_caches[i - self.start_layer])
+                
+                logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i} {time.time() - start}")
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({"hidden_states": hidden_states})
@@ -307,9 +324,14 @@ class OPTDecoder(nn.Module):
             hidden_states, _ = self.project_out(hidden_states)
 
         if prefill_pass:
+            start = time.time()
             kv_cache_transporter.save_hidden_states(input_ids, attn_metadata,
                                                     hidden_states)
+            
+            logger.info(f"Qian ~~~~~~~ prefill: Save hidden states: {time.time() - start}")
+            start = time.time()
             kv_cache_transporter.synchronize()
+            logger.info(f"Qian ~~~~~~~ prefill: Synchronize: {time.time() - start}")
 
         return hidden_states
 

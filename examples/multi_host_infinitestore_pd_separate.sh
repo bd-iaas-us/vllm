@@ -21,7 +21,11 @@ DECODE_LOG="/tmp/decode.log"
 START_TIMEOUT=120
 WAIT_INTERVAL=1
 
-PROMPT="San Francisco is a"
+PROMPTS=(
+    "Imagine a peaceful lakeside scene at dusk, where the setting sun casts an orange glow on the calm water. A lone fisherman stands at the edge of a wooden dock, his silhouette framed by the distant mountains and tranquil sky."
+    "The bustling city square is alive with people from all walks of life, the aroma of street food fills the air as musicians play melodies that echo through the tall buildings."
+    "In a quiet library, a young girl sits surrounded by towering stacks of books, lost in the pages of a magical tale that transports her to faraway lands."
+)
 
 STAGES=("prefill" "decode")
 HOSTS=("$PREFILL_HOST" "$DECODE_HOST")
@@ -128,13 +132,12 @@ cleanup() {
     done
 }
 
-trap cleanup EXIT
+# trap cleanup EXIT
 
 # =========================
 # Main Script Execution
 # =========================
 
-echo aaaaa
 # Check for required commands on hosts
 for i in "${!HOSTS[@]}"; do
     host="${HOSTS[$i]}"
@@ -146,7 +149,7 @@ for i in "${!HOSTS[@]}"; do
         fi
     done
 done
-echo aaaaa1
+
 # Check if Infinity is supported on hosts
 for i in "${!HOSTS[@]}"; do
     host="${HOSTS[$i]}"
@@ -158,19 +161,16 @@ for i in "${!HOSTS[@]}"; do
         EXIT_CODE=$?
     else
         OUTPUT=$(ssh "$host" "bash -c 'source ~/.bashrc; conda activate $conda_env; python3 -c \"from infinistore import check_supported; result = check_supported(); print(result)\"' 2>&1")
-
-        
         EXIT_CODE=$?
     fi
 
-    echo $host: $OUTPUT $EXIT_CODE
     if [ $EXIT_CODE -ne 0 ]; then
         log "Error: Infinity is not supported on host $host: $OUTPUT"
         exit $EXIT_CODE
     fi
 done
 
-echo aaaaa2
+
 # Check if there is at least 1 GPU on each host
 for i in "${!HOSTS[@]}"; do
     host="${HOSTS[$i]}"
@@ -206,7 +206,7 @@ log "All vllm endpoints are ready!"
 # Prepare JSON data
 DATA=$(jq -n \
     --arg model "$MODEL" \
-    --arg prompt "$PROMPT" \
+    --argjson prompt "$(printf '%s\n' "${PROMPTS[@]}" | jq -R . | jq -s .)" \
     '{model: $model, prompt: $prompt}')
 
 log "Sending request to prefill and decode..."
