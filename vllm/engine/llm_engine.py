@@ -1018,6 +1018,11 @@ class LLMEngine:
         request_id: If provided, then only this request is going to be processed
         """
 
+        # import os
+
+        # if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "prefill":
+        #     return None
+
         now = time.time()
 
         if len(ctx.output_queue) == 0:
@@ -1540,6 +1545,12 @@ class LLMEngine:
                      finished_before: Optional[List[int]] = None,
                      skip: Optional[List[int]] = None) -> None:
         """Forced log when no requests active."""
+
+        # import os
+
+        # if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "prefill":
+        #     return None
+        
         if self.log_stats:
             stats = self._get_stats(scheduler_outputs, model_output,
                                     finished_before, skip)

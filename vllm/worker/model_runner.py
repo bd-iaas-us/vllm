@@ -1679,6 +1679,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 **seqlen_agnostic_kwargs,
                 kv_cache_transporter=self.get_kv_cache_transporter(
                     model_input.input_tokens, model_input.attn_metadata))
+        
+
+        # if is_prefill_run(model_input.input_tokens):
+        #     return [None]
 
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):

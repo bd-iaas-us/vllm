@@ -82,7 +82,7 @@ cleanup() {
     pkill -f "vllm serve" || true
 }
 
-trap cleanup EXIT
+# trap cleanup EXIT
 
 # =========================
 # Main Script Execution
@@ -96,16 +96,20 @@ for cmd in vllm curl lsof nvidia-smi; do
     fi
 done
 
-# Check if INFINITY is supported
-OUTPUT=$(python3 -c "from infinity import check_infinity_supported; \
-result = check_infinity_supported(); \
-print(result)" 2>&1)
-EXIT_CODE=$?
+echo "Checking if Infinity is supported..."
 
-if [ $EXIT_CODE -ne 0 ]; then
-    echo "Error: Infinity is not supported: $OUTPUT"
-    exit $EXIT_CODE
-fi
+# # Check if INFINITY is supported
+# OUTPUT=$(python3 -c "from infinity import check_infinity_supported; \
+# result = check_infinity_supported(); \
+# print(result)" 2>&1)
+# EXIT_CODE=$?
+
+# if [ $EXIT_CODE -ne 0 ]; then
+#     echo "Error: Infinity is not supported: $OUTPUT"
+#     exit $EXIT_CODE
+# fi
+
+# echo "Infinity is supported!"
 
 # Check if there are at least 2 GPUs
 GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)

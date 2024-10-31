@@ -489,6 +489,18 @@ async def benchmark(
 
     benchmark_duration = time.perf_counter() - benchmark_start_time
 
+    # for index, input in enumerate(input_requests):
+    #     print(f"______________--{index}--______________")
+    #     print(input)
+
+    # for index, output in enumerate(outputs):
+    #     print(f"______________--{index}--______________")
+    #     print(output)
+
+    for index, output in enumerate(outputs):
+        print(f"-{index}--", output.prompt_len, output.ttft)
+
+
     metrics, actual_output_lens = calculate_metrics(
         input_requests=input_requests,
         outputs=outputs,

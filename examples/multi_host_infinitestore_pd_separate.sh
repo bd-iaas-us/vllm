@@ -33,7 +33,7 @@ GPUS=(0 0)
 LOGS=("$PREFILL_LOG" "$DECODE_LOG")
 
 # Conda environments for each host
-PREFILL_CONDA_ENV="qian2"
+PREFILL_CONDA_ENV="qian"
 DECODE_CONDA_ENV="qian"
 CONDA_ENVS=("$PREFILL_CONDA_ENV" "$DECODE_CONDA_ENV")
 
