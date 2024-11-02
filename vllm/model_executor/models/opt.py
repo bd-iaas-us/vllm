@@ -25,7 +25,7 @@ from transformers import OPTConfig
 
 from vllm.attention import Attention, AttentionMetadata
 from vllm.config import CacheConfig
-from vllm.distributed.kv_transfer.utils import (is_first_decode_pass,
+from vllm.distributed.kv_transfer.utils import (is_first_decode_pass, is_second_decode_pass,
                                                 is_prefill_run)
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.activation import get_act_fn
@@ -261,13 +261,16 @@ class OPTDecoder(nn.Module):
         **kwargs,
     ) -> Union[torch.Tensor, IntermediateTensors]:
         first_decode_pass = is_first_decode_pass(input_ids, attn_metadata)
+        second_decode_pass = is_second_decode_pass(input_ids, attn_metadata,
+                                                      kv_caches[0])
         prefill_pass = is_prefill_run(input_ids)
 
-        if first_decode_pass or prefill_pass:
+        if first_decode_pass or second_decode_pass or prefill_pass:
             if 'kv_cache_transporter' not in kwargs:
                 raise ValueError(
                     "Missing 'kv_cache_transporter' in keyword arguments.")
             kv_cache_transporter = kwargs['kv_cache_transporter']
+
 
         if get_pp_group().is_first_rank:
             if inputs_embeds is None:
@@ -282,39 +285,46 @@ class OPTDecoder(nn.Module):
 
         if first_decode_pass:
             start = time.time()
-            for i, kv_cache in enumerate(kv_caches):
-                kv_cache_transporter.read_kv_cache(input_ids, attn_metadata, i,
-                                                   kv_cache)
-            logger.info(f"Qian ~~~~~~~ Decode: Read kv cache time: {time.time() - start}")
 
-            start = time.time()
             kv_cache_transporter.read_hidden_states(input_ids, attn_metadata,
                                                     hidden_states)
-            
-            logger.info(f"Qian ~~~~~~~ Decode: Read hidden states: {time.time() - start}")
-
-            start = time.time()
 
             kv_cache_transporter.synchronize()
 
-            logger.info(f"Qian ~~~~~~~ Decode: Synchronize: {time.time() - start}")
+            logger.info(f"Qian ~~~~~~~ Decode hidden state: Synchronize: {time.time() - start}")
 
             return hidden_states
 
-        for i in range(self.start_layer, self.end_layer):
-            layer = self.layers[i]
-            hidden_states = layer(hidden_states,
-                                  kv_caches[i - self.start_layer],
-                                  attn_metadata)
+
+        if second_decode_pass:
+            kv_cache_transporter.read_kv_cache(input_ids, attn_metadata, 0,
+                                                   kv_caches[0])
             
-            if prefill_pass:
-                start = time.time()
-                logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i}")
-                kv_cache_transporter.save_kv_cache(
-                    input_ids, attn_metadata, i,
-                    kv_caches[i - self.start_layer])
+            for i in range(self.start_layer, self.end_layer):
+                kv_cache_transporter.synchronize()
+                if i < self.end_layer - 1:
+                    kv_cache_transporter.read_kv_cache(input_ids, attn_metadata, i+1,
+                                                    kv_caches[i+1])
                 
-                logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i} {time.time() - start}")
+                layer = self.layers[i]
+                hidden_states = layer(hidden_states,
+                                    kv_caches[i - self.start_layer],
+                                    attn_metadata)
+        else:
+            for i in range(self.start_layer, self.end_layer):
+                layer = self.layers[i]
+                hidden_states = layer(hidden_states,
+                                    kv_caches[i - self.start_layer],
+                                    attn_metadata)
+                
+                if prefill_pass:
+                    start = time.time()
+                    logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i}")
+                    kv_cache_transporter.save_kv_cache(
+                        input_ids, attn_metadata, i,
+                        kv_caches[i - self.start_layer])
+                    
+                    logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i} {time.time() - start}")
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({"hidden_states": hidden_states})

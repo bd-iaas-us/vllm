@@ -451,6 +451,25 @@ async def benchmark(
 
     benchmark_start_time = time.perf_counter()
     tasks: List[asyncio.Task] = []
+    # async for request in get_request(input_requests, request_rate):
+    #     prompt, prompt_len, output_len, mm_content = request
+    #     request_func_input = RequestFuncInput(
+    #         model=model_id,
+    #         prompt=prompt,
+    #         api_url=api_url,
+    #         prompt_len=prompt_len,
+    #         output_len=output_len,
+    #         logprobs=logprobs,
+    #         best_of=best_of,
+    #         multi_modal_content=mm_content,
+    #     )
+    #     tasks.append(
+    #         asyncio.create_task(
+    #             request_func(request_func_input=request_func_input,
+    #                          pbar=pbar)))
+    # outputs: List[RequestFuncOutput] = await asyncio.gather(*tasks)
+
+    outputs = [] 
     async for request in get_request(input_requests, request_rate):
         prompt, prompt_len, output_len, mm_content = request
         request_func_input = RequestFuncInput(
@@ -463,11 +482,9 @@ async def benchmark(
             best_of=best_of,
             multi_modal_content=mm_content,
         )
-        tasks.append(
-            asyncio.create_task(
-                request_func(request_func_input=request_func_input,
-                             pbar=pbar)))
-    outputs: List[RequestFuncOutput] = await asyncio.gather(*tasks)
+        # Await the request_func call directly to ensure each request completes before the next
+        output = await request_func(request_func_input=request_func_input, pbar=pbar)
+        outputs.append(output)  # Collect each result one by one
 
     if profile:
         print("Stopping profiler...")

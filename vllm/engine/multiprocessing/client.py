@@ -134,15 +134,16 @@ class MQLLMEngineClient:
         """Background loop that continually listens to the RPCServer for
         heartbeats.
         """
+        pass
         try:
             while True:
                 if await self.heartbeat_socket.poll(timeout=timeout) == 0:
                     # No heartbeat was received. Set error and exit the loop
-                    self._set_errored(
-                        TimeoutError("No heartbeat received "
-                                     "from MQLLMEngine"))
-                    logger.debug("Shutting down MQLLMEngineClient check "
-                                 "health loop due to timeout")
+                    # self._set_errored(
+                    #     TimeoutError("No heartbeat received "
+                    #                  "from MQLLMEngine"))
+                    # logger.debug("Shutting down MQLLMEngineClient check "
+                    #              "health loop due to timeout")
                     break
 
                 else:

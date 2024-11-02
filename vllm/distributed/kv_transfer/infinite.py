@@ -38,7 +38,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         self.conn = infinistore.InfinityConnection(infinte_config)
        
-        logger.info("connecting to infinite store server: ", infinite_server)
+        logger.info("connecting to infinite store server: %s", infinite_server)
         
         self.conn.connect()
 

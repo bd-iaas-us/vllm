@@ -27,7 +27,7 @@ from vllm.core.scheduler import SchedulerOutputs
 from vllm.distributed import get_pp_group
 from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
 from vllm.distributed.kv_transfer.infinite import InfiniStoreKVCacheTransporter
-from vllm.distributed.kv_transfer.utils import (is_first_decode_pass,
+from vllm.distributed.kv_transfer.utils import (is_first_decode_pass, is_second_decode_pass,
                                                 is_prefill_run)
 from vllm.distributed.parallel_state import graph_capture
 from vllm.forward_context import set_forward_context
@@ -1607,12 +1607,13 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
     def get_kv_cache_transporter(
             self, input_ids,
-            attn_metadata) -> Optional[KVCacheTransporterBase]:
+            attn_metadata, kv_cache) -> Optional[KVCacheTransporterBase]:
         if is_prefill_run(input_ids) or is_first_decode_pass(
-                input_ids, attn_metadata):
+                input_ids, attn_metadata) or is_second_decode_pass(input_ids,attn_metadata, kv_cache):
             return InfiniStoreKVCacheTransporter(self.model_config.model)
 
         return None
+
 
     @torch.inference_mode()
     @dump_input_when_exception(exclude_args=[0], exclude_kwargs=["self"])
@@ -1622,6 +1623,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         kv_caches: List[torch.Tensor],
         intermediate_tensors: Optional[IntermediateTensors] = None,
         num_steps: int = 1,
+        **kwargs,
     ) -> Optional[Union[List[SamplerOutput], IntermediateTensors]]:
         if num_steps > 1:
             raise ValueError("num_steps > 1 is not supported in ModelRunner")
@@ -1677,8 +1679,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 **MultiModalInputs.as_kwargs(multi_modal_kwargs,
                                             device=self.device),
                 **seqlen_agnostic_kwargs,
-                kv_cache_transporter=self.get_kv_cache_transporter(
-                    model_input.input_tokens, model_input.attn_metadata))
+                **kwargs)
         
 
         # if is_prefill_run(model_input.input_tokens):

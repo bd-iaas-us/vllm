@@ -19,6 +19,10 @@ from vllm.utils import (enable_trace_function_call_for_thread,
 from vllm.worker.model_runner_base import (BroadcastableModelInput,
                                            ModelRunnerBase,
                                            ModelRunnerInputBase)
+from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
+from vllm.distributed.kv_transfer.infinite import InfiniStoreKVCacheTransporter
+from vllm.distributed.kv_transfer.utils import (is_first_decode_pass, is_second_decode_pass,
+                                                is_prefill_run, is_decode_run)
 
 logger = init_logger(__name__)
 
@@ -323,7 +327,10 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                     and self.observability_config.collect_model_execute_time):
                 orig_model_execute_time = intermediate_tensors.tensors.get(
                     "model_execute_time", torch.tensor(0)).item()
+                
 
+        pd_sep_kwargs = self.prepare_pd_sep_kwargs(model_input, execute_model_req, worker_input)
+        kwargs.update(pd_sep_kwargs)
         output = self.model_runner.execute_model(
             model_input=model_input,
             kv_caches=self.kv_cache[worker_input.virtual_engine]
@@ -352,6 +359,57 @@ class LocalOrDistributedWorkerBase(WorkerBase):
 
         # output is List[SamplerOutput]
         return output
+    
+    def prepare_pd_sep_kwargs( self, model_input, execute_model_req, worker_input ) -> Dict[str, torch.Tensor]:
+        
+        kwargs = {}
+        kv_cache = self.kv_cache[worker_input.virtual_engine] if self.kv_cache is not None else None
+        if (
+            not is_prefill_run(model_input.input_tokens) and
+            not is_first_decode_pass(model_input.input_tokens, model_input.attn_metadata) and
+            not is_second_decode_pass(model_input.input_tokens, model_input.attn_metadata, kv_cache)
+        ):
+            return {}
+
+        kv_cache_transporter =  InfiniStoreKVCacheTransporter(self.model_config.model)
+
+        kwargs.update({
+            'kv_cache_transporter': kv_cache_transporter
+        })
+        
+        if is_second_decode_pass(model_input.input_tokens, model_input.attn_metadata, kv_cache) == False:
+            return kwargs
+    
+        # need to pass in the prompt_token_ids and prompt_seq_lengths for the second decode pass
+
+        total_length = sum(len(seq.seq_data[index].prompt_token_ids) for index, seq in enumerate(execute_model_req.seq_group_metadata_list))
+    
+        # Pre-allocate the tensor for combined prompt_token_ids and another for lengths
+        combined_prompt_token_ids = torch.empty(total_length, dtype=torch.long)
+        lengths_tensor = torch.empty(len(execute_model_req.seq_group_metadata_list), dtype=torch.long)
+
+        # Fill in the tensors
+        current_pos = 0
+        for idx, seq in enumerate(execute_model_req.seq_group_metadata_list):
+            # Convert prompt_token_ids (a tuple of longs) to a tensor
+            prompt_token_ids = torch.tensor(seq.seq_data[idx].prompt_token_ids, dtype=torch.long)
+            length = len(prompt_token_ids)
+            
+            # Copy prompt_token_ids into the pre-allocated tensor
+            combined_prompt_token_ids[current_pos:current_pos + length] = prompt_token_ids
+            lengths_tensor[idx] = length
+            
+            # Update the position marker
+            current_pos += length
+        
+        # Update kwargs with new keys as needed
+        kwargs.update({
+            'prompt_token_ids': combined_prompt_token_ids,
+            'prompt_seq_lengths': lengths_tensor,
+        })
+
+        return kwargs
+
 
     def _execute_model_spmd(
         self,
