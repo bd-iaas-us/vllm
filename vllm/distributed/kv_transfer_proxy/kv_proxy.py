@@ -9,8 +9,8 @@ app = FastAPI()
 # VLLM_1_URL = "http://10.192.18.145:8000/v1/completions"
 # VLLM_2_URL = "http://10.192.24.218:8000/v1/completions"
 
-VLLM_1_URL = "http://localhost:8100/v1/completions"
-VLLM_2_URL = "http://localhost:8200/v1/completions"
+VLLM_1_URL = "http://localhost:8000/v1/completions"
+VLLM_2_URL = "http://localhost:8001/v1/completions"
 
 async def send_request_to_vllm(vllm_url, req_data):
     """Send request to a vLLM process and return the response."""

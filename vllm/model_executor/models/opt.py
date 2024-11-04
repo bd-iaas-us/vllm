@@ -316,7 +316,7 @@ class OPTDecoder(nn.Module):
 
             kv_cache_transporter.synchronize()
 
-            logger.info(f"Qian ~~~~~~~ Decode hidden state: Synchronize: {time.time() - start}")
+            # logger.info(f"Qian ~~~~~~~ Decode hidden state: Synchronize: {time.time() - start}")
 
             return hidden_states
 
@@ -337,29 +337,33 @@ class OPTDecoder(nn.Module):
                                                    kv_caches[0])
             
             for i in range(self.start_layer, self.end_layer):
+                start = time.time()
                 kv_cache_transporter.synchronize()
+                logger.info(f"Qian ~~~~~~~ second pass Decode compute: Synchronize: {time.time() - start}")
                 if i < self.end_layer - 1:
                     kv_cache_transporter.read_kv_cache(prompt_token_ids_tensor, lengths_tensor, 
                                                slot_mapping_tensor, i+1,
                                                     kv_caches[i+1])
+                logger.info(f"Qian ~~~~~~~ second pass Decode compute: compute 1: {time.time() - start}")
                 
                 layer = self.layers[i]
                 hidden_states = layer(hidden_states,
                                     kv_caches[i - self.start_layer],
                                     attn_metadata)
+                logger.info(f"Qian ~~~~~~~ second pass Decode compute: compute 2: {time.time() - start}")
         else:
             for i in range(self.start_layer, self.end_layer):
+                start = time.time()
                 layer = self.layers[i]
                 hidden_states = layer(hidden_states,
                                     kv_caches[i - self.start_layer],
                                     attn_metadata)
+                # logger.info(f"Qian ~~~~~~~ Decode compute: Layer {i} {time.time() - start}")
                 
                 if prefill_pass:
                     start = time.time()
-                    logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i}")
-                    # TODO: try with new APIs
                     kv_cache_transporter.save_kv_cache(
-                        input_ids, attn_metadata.seq_seq_lens_tensor, attn_metadata.slot_mapping, i,
+                        input_ids, attn_metadata.seq_lens, attn_metadata.slot_mapping, i,
                         kv_caches[i - self.start_layer])
                     
                     logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i} {time.time() - start}")
@@ -376,10 +380,10 @@ class OPTDecoder(nn.Module):
             kv_cache_transporter.save_hidden_states(input_ids, attn_metadata,
                                                     hidden_states)
             
-            logger.info(f"Qian ~~~~~~~ prefill: Save hidden states: {time.time() - start}")
+            # logger.info(f"Qian ~~~~~~~ prefill: Save hidden states: {time.time() - start}")
             start = time.time()
             kv_cache_transporter.synchronize()
-            logger.info(f"Qian ~~~~~~~ prefill: Synchronize: {time.time() - start}")
+            # logger.info(f"Qian ~~~~~~~ prefill: Synchronize: {time.time() - start}")
 
         return hidden_states
 
