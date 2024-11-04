@@ -9,37 +9,43 @@ class KVCacheTransporterBase(ABC):
     @abstractmethod
     def save_kv_cache(
         self,
-        input_ids: torch.Tensor,
-        attn_metadata: AttentionMetadata,
+        prompt_token_ids: torch.Tensor,
+        prompt_seq_lengths: torch.Tensor,
+        slot_mapping: torch.Tensor,
         layer_idx: int,
-        kv_cache: torch.Tensor,
-    ):
+        kv_cache: torch.Tensor
+    ) -> None:
         """
         Save the key-value cache for a specific layer.
 
         Args:
-            input_ids (torch.Tensor): The input token IDs.
-            attn_metadata (AttentionMetadata): Metadata related to attention.
-            layer_idx (int): The index of the layer.
-            kv_cache (torch.Tensor): The key-value cache tensor.
+            prompt_token_ids (torch.Tensor): Tensor of token IDs from the prompt sequence.
+            prompt_seq_lengths (torch.Tensor): Tensor indicating the sequence lengths of each prompt.
+            slot_mapping (torch.Tensor): Tensor mapping slots to their respective positions in the cache.
+            layer_idx (int): The index of the layer for which the key-value cache is being saved.
+            kv_cache (torch.Tensor): The key-value cache tensor to be updated.
         """
         raise NotImplementedError
+
 
     @abstractmethod
     def read_kv_cache(
         self,
-        input_ids: torch.Tensor,
-        attn_metadata: AttentionMetadata,
+        prompt_token_ids: torch.Tensor,
+        prompt_seq_lengths: torch.Tensor,
+        slot_mapping: torch.Tensor,
         layer_idx: int,
-        kv_cache: torch.Tensor,
-    ):
+        kv_cache: torch.Tensor
+    ) -> None:
         """
-        Read the key-value cache.
+        Read the key-value cache for a specific layer.
 
         Args:
-            input_ids (torch.Tensor): The input token IDs.
-            attn_metadata (AttentionMetadata): Metadata related to attention.
-            kv_cache (torch.Tensor): The key-value cache tensor to be populated.
+            prompt_token_ids (torch.Tensor): Tensor of token IDs from the prompt sequence.
+            prompt_seq_lengths (torch.Tensor): Tensor indicating the sequence lengths of each prompt.
+            slot_mapping (torch.Tensor): Tensor mapping slots to their respective positions in the cache.
+            layer_idx (int): Index of the layer for which the key-value cache is being read.
+            kv_cache (torch.Tensor): The KV cache tensor.
         """
         raise NotImplementedError
 

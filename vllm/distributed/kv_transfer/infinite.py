@@ -42,18 +42,61 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         
         self.conn.connect()
 
+    # def _compute_kv_cache_block_offsets(
+    #         self, prompt_token_ids: torch.Tensor,
+    #         block_tables: torch.Tensor,  layer_idx: int,
+    #         kv_cache: torch.Tensor) -> Tuple[List[Tuple[str, int]], int]:
+
+    #     block_offsets: List[Tuple[str, int]] = []
+    #     prev_hash = ""
+    #     page_size = kv_cache[0][0].numel()  # Number of elements in one page
+    #     k_or_v_cache_size = kv_cache[0].numel()  # Size of key or value cache per token
+
+    #     for page_num, block_index in enumerate(block_tables):
+    #         # Calculate token indices for the current page
+    #         start_token = page_num * self.tokens_per_page
+    #         end_token = min((page_num + 1) * self.tokens_per_page, len(prompt_token_ids))
+    #         tokens_in_page = prompt_token_ids[start_token:end_token].cpu().numpy()
+
+    #         # Compute the hash for the current page
+    #         tokens_bytes = tokens_in_page.tobytes()
+    #         hash_input = prev_hash.encode('utf-8') + tokens_bytes
+    #         current_hash = hashlib.sha256(hash_input).hexdigest()
+
+    #         # Generate cache keys using the current hash
+    #         k_cache_key = f"{self.model}_{current_hash}_layer_{layer_idx}_k"
+    #         v_cache_key = f"{self.model}_{current_hash}_layer_{layer_idx}_v"
+
+    #         # Calculate the offset in the kv_cache for the current page
+
+    #         page_offset = block_index * page_size
+
+
+    #         block_offsets.append((k_cache_key, page_offset))
+    #         block_offsets.append(
+    #             (v_cache_key, page_offset + k_or_v_cache_size))
+
+    #         # Update the previous hash for the next page
+    #         prev_hash = current_hash
+
+    #         logger.debug(
+    #             "Computed kv_cache block offsets: layer %s, page %s, "
+    #             "k_cache_key %s, v_cache_key %s", layer_idx, page_num,
+    #             k_cache_key, v_cache_key)
+
+    #     return block_offsets, page_size
+
     def _compute_kv_cache_block_offsets(
-            self, input_ids: torch.Tensor, attn_metadata: AttentionMetadata,
-            seq_index: int, seq_length: int, layer_idx: int,
+            self, seq_tokens: torch.Tensor, slot_mapping: torch.Tensor, layer_idx: int,
             kv_cache: torch.Tensor) -> Tuple[List[Tuple[str, int]], int]:
 
-        seq_tokens = input_ids[seq_index:seq_index + seq_length].cpu().numpy()
+        seq_tokens = seq_tokens.cpu().numpy()
+        seq_length = len(seq_tokens)
         num_pages = math.ceil(seq_length / self.tokens_per_page)
         block_offsets: List[Tuple[str, int]] = []
         prev_hash = ""
         page_size = kv_cache[0][0].numel()  # Number of elements in one page
-        k_or_v_cache_size = kv_cache[0].numel(
-        )  # Size of key or value cache per token
+        k_or_v_cache_size = kv_cache[0].numel()  # Size of key or value cache per token
 
         for page_num in range(num_pages):
             # Calculate token indices for the current page
@@ -73,8 +116,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             # Calculate the offset in the kv_cache for the current page
             try:
                 slot_index = page_num * self.tokens_per_page
-                slot_mapping_value = attn_metadata.slot_mapping[
-                    seq_index + slot_index].item()
+                slot_mapping_value = slot_mapping[page_num*self.tokens_per_page].item()
                 page_offset = (slot_mapping_value //
                                self.tokens_per_page) * page_size
             except IndexError as e:
@@ -137,20 +179,50 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 page_num, cache_key)
 
         return block_offsets
+    
+    # def save_kv_cache(self, prompt_token_ids: torch.Tensor,
+    #                   prompt_seq_lengths: torch.Tensor, block_tables: torch.Tensor, layer_idx: int,
+    #                   kv_cache: torch.Tensor) -> None:
 
-    def save_kv_cache(self, input_ids: torch.Tensor,
-                      attn_metadata: AttentionMetadata, layer_idx: int,
+    #     seq_index = 0
+    #     page_index = 0
+
+    #     for seq_length_tensor in prompt_seq_lengths:
+    #         seq_length = seq_length_tensor.item()
+    #         page_count = math.ceil(seq_length / self.tokens_per_page)
+            
+    #         block_offsets, page_size = self._compute_kv_cache_block_offsets(
+    #             prompt_token_ids[seq_index:seq_index + seq_length],
+    #             block_tables[page_index: page_index + page_count],
+    #             layer_idx,
+    #             kv_cache)
+
+    #         # Read from cache
+    #         try:
+    #             self.conn.rsave_cache(kv_cache, block_offsets, page_size)
+    #         except Exception as e:
+    #             logger.error("Failed to read kv_cache: %s", e)
+    #             raise
+
+    #         seq_index += seq_length
+    #         page_index += page_count
+
+    #     logger.debug("Saved kv_cache for layer %s", layer_idx)
+
+    def save_kv_cache(self, prompt_token_ids: torch.Tensor,
+                      prompt_seq_lengths: torch.Tensor, slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
         seq_index = 0
 
         # TODO: self.conn.write_cache called only once
-        for seq_length_tensor in attn_metadata.seq_lens_tensor:
+        for seq_length_tensor in prompt_seq_lengths:
             seq_length = seq_length_tensor.item()
             block_offsets, page_size = self._compute_kv_cache_block_offsets(
-                input_ids, attn_metadata, seq_index, seq_length, layer_idx,
+                prompt_token_ids[seq_index:seq_index + seq_length],
+                slot_mapping[seq_index:seq_index + seq_length],
+                layer_idx,
                 kv_cache)
-
             # Write to cache
             try:
                 import time
@@ -165,16 +237,19 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         logger.debug("Saved kv_cache for layer %s", layer_idx)
 
-    def read_kv_cache(self, input_ids: torch.Tensor,
-                      attn_metadata: AttentionMetadata, layer_idx: int,
+    def read_kv_cache(self, prompt_token_ids: torch.Tensor,
+                      prompt_seq_lengths: torch.Tensor, slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
         seq_index = 0
 
-        for seq_length_tensor in attn_metadata.seq_lens_tensor:
+        for seq_length_tensor in prompt_seq_lengths:
             seq_length = seq_length_tensor.item()
+            
             block_offsets, page_size = self._compute_kv_cache_block_offsets(
-                input_ids, attn_metadata, seq_index, seq_length, layer_idx,
+                prompt_token_ids[seq_index:seq_index + seq_length],
+                slot_mapping[seq_index:seq_index + seq_length],
+                layer_idx,
                 kv_cache)
 
             # Read from cache

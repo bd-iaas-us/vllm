@@ -377,38 +377,52 @@ class LocalOrDistributedWorkerBase(WorkerBase):
             'kv_cache_transporter': kv_cache_transporter
         })
         
-        if is_second_decode_pass(model_input.input_tokens, model_input.attn_metadata, kv_cache) == False:
+        if is_prefill_run(model_input.input_tokens):
             return kwargs
+        
+        request_ids = [seq.request_id for seq in execute_model_req.seq_group_metadata_list]
+        kwargs.update({
+            'request_ids': request_ids,
+        })
+        
+        return kwargs
+    
+
+
+        
+        # pass in request_ids in decode passes
+
+
     
         # need to pass in the prompt_token_ids and prompt_seq_lengths for the second decode pass
 
-        total_length = sum(len(seq.seq_data[index].prompt_token_ids) for index, seq in enumerate(execute_model_req.seq_group_metadata_list))
+        # total_length = sum(len(seq.seq_data[index].prompt_token_ids) for index, seq in enumerate(execute_model_req.seq_group_metadata_list))
     
-        # Pre-allocate the tensor for combined prompt_token_ids and another for lengths
-        combined_prompt_token_ids = torch.empty(total_length, dtype=torch.long)
-        lengths_tensor = torch.empty(len(execute_model_req.seq_group_metadata_list), dtype=torch.long)
+        # # Pre-allocate the tensor for combined prompt_token_ids and another for lengths
+        # combined_prompt_token_ids = torch.empty(total_length, dtype=torch.long)
+        # lengths_tensor = torch.empty(len(execute_model_req.seq_group_metadata_list), dtype=torch.long)
 
-        # Fill in the tensors
-        current_pos = 0
-        for idx, seq in enumerate(execute_model_req.seq_group_metadata_list):
-            # Convert prompt_token_ids (a tuple of longs) to a tensor
-            prompt_token_ids = torch.tensor(seq.seq_data[idx].prompt_token_ids, dtype=torch.long)
-            length = len(prompt_token_ids)
+        # # Fill in the tensors
+        # current_pos = 0
+        # for idx, seq in enumerate(execute_model_req.seq_group_metadata_list):
+        #     # Convert prompt_token_ids (a tuple of longs) to a tensor
+        #     prompt_token_ids = torch.tensor(seq.seq_data[idx].prompt_token_ids, dtype=torch.long)
+        #     length = len(prompt_token_ids)
             
-            # Copy prompt_token_ids into the pre-allocated tensor
-            combined_prompt_token_ids[current_pos:current_pos + length] = prompt_token_ids
-            lengths_tensor[idx] = length
+        #     # Copy prompt_token_ids into the pre-allocated tensor
+        #     combined_prompt_token_ids[current_pos:current_pos + length] = prompt_token_ids
+        #     lengths_tensor[idx] = length
             
-            # Update the position marker
-            current_pos += length
+        #     # Update the position marker
+        #     current_pos += length
         
-        # Update kwargs with new keys as needed
-        kwargs.update({
-            'prompt_token_ids': combined_prompt_token_ids,
-            'prompt_seq_lengths': lengths_tensor,
-        })
+        # # Update kwargs with new keys as needed
+        # kwargs.update({
+        #     'prompt_token_ids': combined_prompt_token_ids,
+        #     'prompt_seq_lengths': lengths_tensor,
+        # })
 
-        return kwargs
+        # return kwargs
 
 
     def _execute_model_spmd(

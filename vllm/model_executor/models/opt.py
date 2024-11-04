@@ -50,6 +50,7 @@ import time
 from vllm.logger import init_logger
 logger = init_logger(__name__)
 
+kv_cache_decode_data = {}
 
 class OPTLearnedPositionalEmbedding(nn.Embedding):
 
@@ -260,6 +261,7 @@ class OPTDecoder(nn.Module):
         inputs_embeds: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        global kv_cache_decode_data
         first_decode_pass = is_first_decode_pass(input_ids, attn_metadata)
         second_decode_pass = is_second_decode_pass(input_ids, attn_metadata,
                                                       kv_caches[0])
@@ -270,6 +272,17 @@ class OPTDecoder(nn.Module):
                 raise ValueError(
                     "Missing 'kv_cache_transporter' in keyword arguments.")
             kv_cache_transporter = kwargs['kv_cache_transporter']
+        
+        if second_decode_pass or first_decode_pass:
+            if "request_ids" not in kwargs:
+                raise ValueError(
+                    "Missing 'request_ids' in keyword arguments.")
+            
+            request_ids = kwargs["request_ids"]
+
+            if first_decode_pass and len(request_ids) != len(attn_metadata.seq_lens):
+                raise ValueError(
+                    "The number of request_ids should be equal to the number of sequences.")
 
 
         if get_pp_group().is_first_rank:
@@ -284,10 +297,22 @@ class OPTDecoder(nn.Module):
             hidden_states = intermediate_tensors["hidden_states"]
 
         if first_decode_pass:
+
             start = time.time()
 
             kv_cache_transporter.read_hidden_states(input_ids, attn_metadata,
                                                     hidden_states)
+            
+            
+            seq_lens = attn_metadata.seq_lens
+            seq_index = 0
+            for i, request_id in enumerate(request_ids):
+                seq_len = seq_lens[i]
+                kv_cache_decode_data[request_id] = {
+                    "prompt_token_ids": input_ids[seq_index:seq_index+seq_len],
+                    "slot_mapping": attn_metadata.slot_mapping[seq_index:seq_index+seq_len],
+                }
+                seq_index += seq_len
 
             kv_cache_transporter.synchronize()
 
@@ -297,13 +322,25 @@ class OPTDecoder(nn.Module):
 
 
         if second_decode_pass:
-            kv_cache_transporter.read_kv_cache(input_ids, attn_metadata, 0,
+
+            if missing_ids := [req for req in request_ids if req not in kv_cache_decode_data]:
+                raise ValueError(f"Missing kv cache data for request_ids {missing_ids}")
+
+            prompt_token_ids_tensor = torch.cat([torch.tensor(kv_cache_decode_data[req]["prompt_token_ids"]) for req in request_ids], dim=0)
+            lengths_tensor = torch.cat([torch.tensor([len(kv_cache_decode_data[req]["prompt_token_ids"])]) for req in request_ids], dim=0)
+            slot_mapping_tensor = torch.cat([torch.tensor(kv_cache_decode_data[req]["slot_mapping"]) for req in request_ids], dim=0)
+
+            [kv_cache_decode_data.pop(req, None) for req in request_ids]
+            
+            kv_cache_transporter.read_kv_cache(prompt_token_ids_tensor, lengths_tensor, 
+                                               slot_mapping_tensor, 0,
                                                    kv_caches[0])
             
             for i in range(self.start_layer, self.end_layer):
                 kv_cache_transporter.synchronize()
                 if i < self.end_layer - 1:
-                    kv_cache_transporter.read_kv_cache(input_ids, attn_metadata, i+1,
+                    kv_cache_transporter.read_kv_cache(prompt_token_ids_tensor, lengths_tensor, 
+                                               slot_mapping_tensor, i+1,
                                                     kv_caches[i+1])
                 
                 layer = self.layers[i]
@@ -320,8 +357,9 @@ class OPTDecoder(nn.Module):
                 if prefill_pass:
                     start = time.time()
                     logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i}")
+                    # TODO: try with new APIs
                     kv_cache_transporter.save_kv_cache(
-                        input_ids, attn_metadata, i,
+                        input_ids, attn_metadata.seq_seq_lens_tensor, attn_metadata.slot_mapping, i,
                         kv_caches[i - self.start_layer])
                     
                     logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i} {time.time() - start}")
