@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 Default_Infinite_Server = "127.0.0.1"
 
 class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
+    #Class-level singleton connection instance
+    _singleton_conn = None
 
     def __init__(self, model: str, tokens_per_page=16) -> None:
         if not model:
@@ -29,18 +31,24 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         infinite_server = os.environ.get("INFINITE_STORE_SERVER", Default_Infinite_Server)
         infinite_server = infinite_server.strip('"')
-        infinte_config = infinistore.ClientConfig(
-            host_addr=infinite_server,
-            service_port=22345,
-            log_level="warning",
-            connection_type=infinistore.TYPE_RDMA,
-        )
+        if InfiniStoreKVCacheTransporter._singleton_conn is None:
+            infinte_config = infinistore.ClientConfig(
+                host_addr=infinite_server,
+                service_port=22345,
+                log_level="info",
+                connection_type=infinistore.TYPE_RDMA,
+                ib_port=1,
+                link_type="IB",
+                dev_name="mlx5_1",
+            )
+            InfiniStoreKVCacheTransporter._singleton_conn = infinistore.InfinityConnection(infinte_config)
+            logger.info("Connecting to infinite store server: %s", infinite_server)
 
-        self.conn = infinistore.InfinityConnection(infinte_config)
-       
-        logger.info("connecting to infinite store server: %s", infinite_server)
-        
-        self.conn.connect()
+            InfiniStoreKVCacheTransporter._singleton_conn.connect()
+
+        # Assign the singleton connection to the instance attribute
+        self.conn = InfiniStoreKVCacheTransporter._singleton_conn
+
 
     def _compute_kv_cache_block_offsets(
         self,
@@ -157,35 +165,6 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 page_num, cache_key)
 
         return block_offsets
-    
-    # def save_kv_cache(self, prompt_token_ids: torch.Tensor,
-    #                   prompt_seq_lengths: torch.Tensor, block_tables: torch.Tensor, layer_idx: int,
-    #                   kv_cache: torch.Tensor) -> None:
-
-    #     seq_index = 0
-    #     page_index = 0
-
-    #     for seq_length_tensor in prompt_seq_lengths:
-    #         seq_length = seq_length_tensor.item()
-    #         page_count = math.ceil(seq_length / self.tokens_per_page)
-            
-    #         block_offsets, page_size = self._compute_kv_cache_block_offsets(
-    #             prompt_token_ids[seq_index:seq_index + seq_length],
-    #             block_tables[page_index: page_index + page_count],
-    #             layer_idx,
-    #             kv_cache)
-
-    #         # Read from cache
-    #         try:
-    #             self.conn.rsave_cache(kv_cache, block_offsets, page_size)
-    #         except Exception as e:
-    #             logger.error("Failed to read kv_cache: %s", e)
-    #             raise
-
-    #         seq_index += seq_length
-    #         page_index += page_count
-
-    #     logger.debug("Saved kv_cache for layer %s", layer_idx)
 
     def save_kv_cache(self, prompt_token_ids: torch.Tensor,
                       prompt_seq_lengths: torch.Tensor, slot_mapping: torch.Tensor, layer_idx: int,
@@ -203,6 +182,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             start = time.time()
             self.conn.write_cache(kv_cache, block_offsets, page_size)
             logger.info("tocheck: ~~~~~~~~ write_cache time: %s", time.time() - start)
+            
         except Exception as e:
             logger.error("Failed to write kv_cache: %s", e)
             raise
@@ -225,6 +205,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             start = time.time()
             self.conn.read_cache(kv_cache, block_offsets, page_size)
             logger.info("tocheck: ~~~~~~~~ read_cache time: %s", time.time() - start)
+            
         except Exception as e:
             logger.error("Failed to read kv_cache: %s", e)
             raise
@@ -236,6 +217,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                            hidden_states: torch.Tensor) -> None:
 
         seq_index = 0
+        self.conn.register_mr(hidden_states)
 
         for seq_length_tensor in attn_metadata.seq_lens_tensor:
             seq_length = seq_length_tensor.item()
@@ -259,6 +241,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                            hidden_states: torch.Tensor) -> None:
 
         seq_index = 0
+        self.conn.register_mr(hidden_states)
 
         for seq_length_tensor in attn_metadata.seq_lens_tensor:
             seq_length = seq_length_tensor.item()

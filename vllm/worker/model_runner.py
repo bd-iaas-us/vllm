@@ -1605,14 +1605,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                                    is_prompt=is_prompt,
                                    virtual_engine=virtual_engine)
 
-    def get_kv_cache_transporter(
-            self, input_ids,
-            attn_metadata, kv_cache) -> Optional[KVCacheTransporterBase]:
-        if is_prefill_run(input_ids) or is_first_decode_pass(
-                input_ids, attn_metadata) or is_second_decode_pass(input_ids,attn_metadata, kv_cache):
-            return InfiniStoreKVCacheTransporter(self.model_config.model)
-
-        return None
 
 
     @torch.inference_mode()

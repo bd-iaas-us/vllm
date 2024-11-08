@@ -3,9 +3,11 @@ import json
 from dataclasses import dataclass, field, fields
 from typing import (TYPE_CHECKING, Any, ClassVar, Dict, List, Mapping,
                     Optional, Tuple, Type, Union)
+import os
 
 import torch
 from transformers import PretrainedConfig
+import infinistore
 
 import vllm.envs as envs
 from vllm.logger import init_logger
@@ -605,6 +607,8 @@ class CacheConfig:
         # Will be set after profiling.
         self.num_gpu_blocks = None
         self.num_cpu_blocks = None
+
+        self.kv_cache_transporter = None
 
     def metrics_info(self):
         # convert cache_config to dict(key: str, value: str) for prometheus

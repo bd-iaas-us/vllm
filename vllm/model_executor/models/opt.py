@@ -203,6 +203,7 @@ class OPTDecoder(nn.Module):
     ):
         super().__init__()
         self.config = config
+        self.cache_config = cache_config
         self.padding_idx = config.pad_token_id
         self.max_target_positions = config.max_position_embeddings
         self.vocab_size = config.vocab_size
@@ -268,10 +269,9 @@ class OPTDecoder(nn.Module):
         prefill_pass = is_prefill_run(input_ids)
 
         if first_decode_pass or second_decode_pass or prefill_pass:
-            if 'kv_cache_transporter' not in kwargs:
-                raise ValueError(
-                    "Missing 'kv_cache_transporter' in keyword arguments.")
-            kv_cache_transporter = kwargs['kv_cache_transporter']
+            if self.cache_config.kv_cache_transporter is None:
+                raise ValueError("kv_cache_transport_conn is None")
+            kv_cache_transporter = self.cache_config.kv_cache_transporter
         
         if second_decode_pass or first_decode_pass:
             if "request_ids" not in kwargs:
@@ -361,6 +361,9 @@ class OPTDecoder(nn.Module):
                 # logger.info(f"Qian ~~~~~~~ Decode compute: Layer {i} {time.time() - start}")
                 
                 if prefill_pass:
+
+                    logger.info(f"2 ?????????????????? {hex(id(kv_cache_transporter.conn))}   {hex(id(self.cache_config.kv_cache_transporter.conn))}")
+
                     start = time.time()
                     kv_cache_transporter.save_kv_cache(
                         input_ids, attn_metadata.seq_lens, attn_metadata.slot_mapping, i,

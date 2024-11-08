@@ -365,20 +365,10 @@ class LocalOrDistributedWorkerBase(WorkerBase):
         kwargs = {}
         kv_cache = self.kv_cache[worker_input.virtual_engine] if self.kv_cache is not None else None
         if (
-            not is_prefill_run(model_input.input_tokens) and
             not is_first_decode_pass(model_input.input_tokens, model_input.attn_metadata) and
             not is_second_decode_pass(model_input.input_tokens, model_input.attn_metadata, kv_cache)
         ):
             return {}
-
-        kv_cache_transporter =  InfiniStoreKVCacheTransporter(self.model_config.model)
-
-        kwargs.update({
-            'kv_cache_transporter': kv_cache_transporter
-        })
-        
-        if is_prefill_run(model_input.input_tokens):
-            return kwargs
         
         request_ids = [seq.request_id for seq in execute_model_req.seq_group_metadata_list]
         kwargs.update({

@@ -331,10 +331,7 @@ class LlamaModel(nn.Module):
         prefill_pass = is_prefill_run(input_ids)
 
         if first_decode_pass or prefill_pass:
-            if 'kv_cache_transporter' not in kwargs:
-                raise ValueError(
-                    "Missing 'kv_cache_transporter' in keyword arguments.")
-            kv_cache_transporter = kwargs['kv_cache_transporter']
+            if self.cache_config.
 
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
