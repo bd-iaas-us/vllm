@@ -25,7 +25,7 @@ from transformers import OPTConfig
 
 from vllm.attention import Attention, AttentionMetadata
 from vllm.config import CacheConfig
-from vllm.distributed.kv_transfer.utils import (is_first_decode_pass, is_second_decode_pass,
+from vllm.distributed.kv_transfer.utils import (is_first_decode_pass, is_decode_run,
                                                 is_prefill_run)
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.activation import get_act_fn
@@ -263,17 +263,19 @@ class OPTDecoder(nn.Module):
         **kwargs,
     ) -> Union[torch.Tensor, IntermediateTensors]:
         global kv_cache_decode_data
+        decode_pass = is_decode_run(input_ids)
         first_decode_pass = is_first_decode_pass(input_ids, attn_metadata)
-        second_decode_pass = is_second_decode_pass(input_ids, attn_metadata,
-                                                      kv_caches[0])
+        # second_decode_pass = is_second_decode_pass(input_ids, attn_metadata,
+        #                                               kv_caches[0])
         prefill_pass = is_prefill_run(input_ids)
 
-        if first_decode_pass or second_decode_pass or prefill_pass:
+        if decode_pass or prefill_pass:
             if self.cache_config.kv_cache_transporter is None:
-                raise ValueError("kv_cache_transport_conn is None")
+                raise ValueError("kv_cache_transporter is None")
             kv_cache_transporter = self.cache_config.kv_cache_transporter
         
-        if second_decode_pass or first_decode_pass:
+        request_ids = []
+        if decode_pass:
             if "request_ids" not in kwargs:
                 raise ValueError(
                     "Missing 'request_ids' in keyword arguments.")
@@ -321,7 +323,9 @@ class OPTDecoder(nn.Module):
             return hidden_states
 
 
-        if second_decode_pass:
+        if request_ids and request_ids[0] in kv_cache_decode_data:
+
+            print("the second pass ~~~~~~~~~~")
 
             if missing_ids := [req for req in request_ids if req not in kv_cache_decode_data]:
                 raise ValueError(f"Missing kv cache data for request_ids {missing_ids}")
@@ -337,20 +341,16 @@ class OPTDecoder(nn.Module):
                                                    kv_caches[0])
             
             for i in range(self.start_layer, self.end_layer):
-                start = time.time()
                 kv_cache_transporter.synchronize()
-                logger.info(f"Qian ~~~~~~~ second pass Decode compute: Synchronize: {time.time() - start}")
                 if i < self.end_layer - 1:
                     kv_cache_transporter.read_kv_cache(prompt_token_ids_tensor, lengths_tensor, 
                                                slot_mapping_tensor, i+1,
                                                     kv_caches[i+1])
-                logger.info(f"Qian ~~~~~~~ second pass Decode compute: compute 1: {time.time() - start}")
                 
                 layer = self.layers[i]
                 hidden_states = layer(hidden_states,
                                     kv_caches[i - self.start_layer],
                                     attn_metadata)
-                logger.info(f"Qian ~~~~~~~ second pass Decode compute: compute 2: {time.time() - start}")
         else:
             for i in range(self.start_layer, self.end_layer):
                 start = time.time()
@@ -361,15 +361,10 @@ class OPTDecoder(nn.Module):
                 # logger.info(f"Qian ~~~~~~~ Decode compute: Layer {i} {time.time() - start}")
                 
                 if prefill_pass:
-
-                    logger.info(f"2 ?????????????????? {hex(id(kv_cache_transporter.conn))}   {hex(id(self.cache_config.kv_cache_transporter.conn))}")
-
-                    start = time.time()
                     kv_cache_transporter.save_kv_cache(
                         input_ids, attn_metadata.seq_lens, attn_metadata.slot_mapping, i,
                         kv_caches[i - self.start_layer])
-                    
-                    logger.info(f"Qian ~~~~~~~ prefill: Save kv cache: layer {i} {time.time() - start}")
+            
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({"hidden_states": hidden_states})

@@ -27,8 +27,8 @@ from vllm.core.scheduler import SchedulerOutputs
 from vllm.distributed import get_pp_group
 from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
 from vllm.distributed.kv_transfer.infinite import InfiniStoreKVCacheTransporter
-from vllm.distributed.kv_transfer.utils import (is_first_decode_pass, is_second_decode_pass,
-                                                is_prefill_run)
+from vllm.distributed.kv_transfer.utils import is_decode_run
+                                                
 from vllm.distributed.parallel_state import graph_capture
 from vllm.forward_context import set_forward_context
 from vllm.inputs import INPUT_REGISTRY, InputRegistry

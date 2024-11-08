@@ -101,10 +101,8 @@ class CacheEngine:
                             pin_memory=pin_memory,
                             device=device))
             
-            logger.info(f"?????????????????? {hex(id(self.cache_config.kv_cache_transporter))}")
             if self.cache_config.kv_cache_transporter is not None and device != "cpu":
                 self.cache_config.kv_cache_transporter.conn.register_mr(kv_cache[-1])
-                logger.info(f"~~~~~~~~Registered MR for cache block {kv_cache[-1].data_ptr()} conn addr {hex(id(self.cache_config.kv_cache_transporter.conn))}")
 
         return kv_cache
 
