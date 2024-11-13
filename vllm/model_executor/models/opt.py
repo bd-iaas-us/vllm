@@ -26,6 +26,12 @@ from vllm.attention import Attention, AttentionMetadata
 from vllm.compilation.decorators import support_torch_compile
 from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
+from vllm.config import CacheConfig
+from vllm.distributed import get_tensor_model_parallel_world_size
+from vllm.distributed.kv_transfer.utils import (is_first_decode_pass,
+                                                is_decode_run, is_prefill_run,
+                                                compute_token_page_hashes)
+from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.activation import get_act_fn
 from vllm.model_executor.layers.linear import (ColumnParallelLinear,
                                                QKVParallelLinear,
@@ -44,6 +50,12 @@ from .interfaces import SupportsPP
 from .utils import (is_pp_missing_parameter,
                     make_empty_intermediate_tensors_factory, make_layers,
                     maybe_prefix)
+
+from vllm.logger import init_logger
+
+logger = init_logger(__name__)
+
+kv_cache_decode_data = {}
 
 
 class OPTLearnedPositionalEmbedding(nn.Embedding):
@@ -204,6 +216,7 @@ class OPTDecoder(nn.Module):
     ):
         super().__init__()
         self.config = config
+        self.cache_config = cache_config
         self.padding_idx = config.pad_token_id
         self.max_target_positions = config.max_position_embeddings
         self.vocab_size = config.vocab_size
@@ -263,7 +276,35 @@ class OPTDecoder(nn.Module):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors],
         inputs_embeds: Optional[torch.Tensor] = None,
+        **kwargs,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        global kv_cache_decode_data
+        decode_pass = is_decode_run(input_ids)
+        first_decode_pass = is_first_decode_pass(input_ids, attn_metadata)
+        second_decode_pass = False
+        prefill_pass = is_prefill_run(input_ids)
+
+        if decode_pass or prefill_pass:
+            if self.cache_config.kv_cache_transporter is None:
+                raise ValueError("kv_cache_transporter is None")
+            kv_cache_transporter = self.cache_config.kv_cache_transporter
+
+        request_ids = []
+        if decode_pass:
+            if "request_ids" not in kwargs:
+                raise ValueError("Missing 'request_ids' in keyword arguments.")
+
+            request_ids = kwargs["request_ids"]
+
+            if first_decode_pass and len(request_ids) != len(
+                    attn_metadata.seq_lens):
+                raise ValueError(
+                    "The number of request_ids should be equal to the number of sequences."
+                )
+
+            if request_ids and request_ids[0] in kv_cache_decode_data:
+                second_decode_pass = True
+
         if get_pp_group().is_first_rank:
             if inputs_embeds is None:
                 inputs_embeds = self.get_input_embeddings(input_ids)
@@ -275,11 +316,91 @@ class OPTDecoder(nn.Module):
             assert intermediate_tensors is not None
             hidden_states = intermediate_tensors["hidden_states"]
 
-        for i in range(self.start_layer, self.end_layer):
-            layer = self.layers[i]
-            hidden_states = layer(hidden_states,
-                                  kv_caches[i - self.start_layer],
-                                  attn_metadata)
+        input_token_hashes = []
+        if prefill_pass or first_decode_pass:
+            input_token_hashes = compute_token_page_hashes(
+                input_ids, attn_metadata.seq_lens)
+
+        if first_decode_pass:
+            kv_cache_transporter.read_hidden_states(input_token_hashes,
+                                                    attn_metadata.seq_lens,
+                                                    hidden_states)
+
+            seq_lens = attn_metadata.seq_lens
+            seq_index = 0
+            for i, request_id in enumerate(request_ids):
+                seq_len = seq_lens[i]
+                kv_cache_decode_data[request_id] = {
+                    "prompt_token_ids":
+                    input_ids[seq_index:seq_index + seq_len],
+                    "slot_mapping":
+                    attn_metadata.slot_mapping[seq_index:seq_index + seq_len],
+                }
+                seq_index += seq_len
+
+            kv_cache_transporter.synchronize()
+
+            return hidden_states
+
+        if second_decode_pass:
+            if missing_ids := [
+                    req for req in request_ids
+                    if req not in kv_cache_decode_data
+            ]:
+                raise ValueError(
+                    f"Missing kv cache data for request_ids {missing_ids}")
+
+            prompt_token_ids_tensor = torch.cat([
+                torch.tensor(kv_cache_decode_data[req]["prompt_token_ids"])
+                for req in request_ids
+            ],
+                                                dim=0)
+            lengths_tensor = torch.cat([
+                torch.tensor(
+                    [len(kv_cache_decode_data[req]["prompt_token_ids"])])
+                for req in request_ids
+            ],
+                                       dim=0)
+            slot_mapping_tensor = torch.cat([
+                torch.tensor(kv_cache_decode_data[req]["slot_mapping"])
+                for req in request_ids
+            ],
+                                            dim=0)
+
+            input_token_hashes = compute_token_page_hashes(
+                prompt_token_ids_tensor, lengths_tensor)
+
+            [kv_cache_decode_data.pop(req, None) for req in request_ids]
+
+            kv_cache_transporter.read_kv_cache(input_token_hashes,
+                                               lengths_tensor,
+                                               slot_mapping_tensor, 0,
+                                               kv_caches[0])
+
+            for i in range(self.start_layer, self.end_layer):
+                kv_cache_transporter.synchronize()
+                if i < self.end_layer - 1:
+                    kv_cache_transporter.read_kv_cache(input_token_hashes,
+                                                       lengths_tensor,
+                                                       slot_mapping_tensor,
+                                                       i + 1, kv_caches[i + 1])
+
+                layer = self.layers[i]
+                hidden_states = layer(hidden_states,
+                                      kv_caches[i - self.start_layer],
+                                      attn_metadata)
+        else:
+            for i in range(self.start_layer, self.end_layer):
+                layer = self.layers[i]
+                hidden_states = layer(hidden_states,
+                                      kv_caches[i - self.start_layer],
+                                      attn_metadata)
+
+                if prefill_pass:
+                    kv_cache_transporter.save_kv_cache(
+                        input_token_hashes, attn_metadata.seq_lens,
+                        attn_metadata.slot_mapping, i,
+                        kv_caches[i - self.start_layer])
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({"hidden_states": hidden_states})
@@ -287,8 +408,15 @@ class OPTDecoder(nn.Module):
             hidden_states = self.final_layer_norm(hidden_states)
         if self.project_out is not None:
             hidden_states, _ = self.project_out(hidden_states)
-        return hidden_states
 
+        if prefill_pass:
+            kv_cache_transporter.save_hidden_states(input_token_hashes,
+                                                    attn_metadata.seq_lens,
+                                                    hidden_states)
+
+            kv_cache_transporter.synchronize()
+
+        return hidden_states
 
 @support_torch_compile
 class OPTModel(nn.Module):
@@ -319,13 +447,16 @@ class OPTModel(nn.Module):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors],
         inputs_embeds: Optional[torch.Tensor] = None,
+        **kwargs,
     ) -> Union[torch.Tensor, IntermediateTensors]:
         return self.decoder(input_ids,
                             positions,
                             kv_caches,
                             attn_metadata,
                             intermediate_tensors,
-                            inputs_embeds=inputs_embeds)
+                            inputs_embeds=inputs_embeds,
+                            **kwargs)
+
 
 
 class OPTForCausalLM(nn.Module, SupportsPP):
@@ -371,10 +502,12 @@ class OPTForCausalLM(nn.Module, SupportsPP):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
+        **kwargs,
     ) -> Union[torch.Tensor, IntermediateTensors]:
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    attn_metadata, intermediate_tensors,
-                                   inputs_embeds)
+                                   inputs_embeds, **kwargs)
+
         return hidden_states
 
     def compute_logits(

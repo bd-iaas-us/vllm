@@ -18,6 +18,7 @@ from vllm.utils import (enable_trace_function_call_for_thread,
 from vllm.worker.model_runner_base import (BroadcastableModelInput,
                                            ModelRunnerBase,
                                            ModelRunnerInputBase)
+from vllm.distributed.kv_transfer.utils import (is_decode_run)
 
 logger = init_logger(__name__)
 
@@ -339,6 +340,10 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                 orig_model_execute_time = intermediate_tensors.tensors.get(
                     "model_execute_time", torch.tensor(0)).item()
 
+        pd_sep_kwargs = self.prepare_pd_sep_kwargs(model_input,
+                                                   execute_model_req,
+                                                   worker_input)
+        kwargs.update(pd_sep_kwargs)
         output = self.model_runner.execute_model(
             model_input=model_input,
             kv_caches=self.kv_cache[worker_input.virtual_engine]
@@ -367,6 +372,21 @@ class LocalOrDistributedWorkerBase(WorkerBase):
 
         # output is List[SamplerOutput]
         return output
+
+    def prepare_pd_sep_kwargs(self, model_input, execute_model_req,
+                              worker_input) -> Dict[str, torch.Tensor]:
+
+        kwargs = {}
+        if is_decode_run(model_input.input_tokens):
+            request_ids = [
+                seq.request_id
+                for seq in execute_model_req.seq_group_metadata_list
+            ]
+            kwargs.update({
+                'request_ids': request_ids,
+            })
+
+        return kwargs
 
     def _execute_model_spmd(
         self,

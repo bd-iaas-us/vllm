@@ -22,6 +22,7 @@ from vllm.compilation.compile_context import set_compile_context
 from vllm.config import CompilationLevel, VllmConfig
 from vllm.core.scheduler import SchedulerOutputs
 from vllm.distributed import get_pp_group
+
 from vllm.distributed.parallel_state import graph_capture
 from vllm.forward_context import set_forward_context
 from vllm.inputs import INPUT_REGISTRY, InputRegistry
@@ -1604,6 +1605,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         kv_caches: List[torch.Tensor],
         intermediate_tensors: Optional[IntermediateTensors] = None,
         num_steps: int = 1,
+        **kwargs,
     ) -> Optional[Union[List[SamplerOutput], IntermediateTensors]]:
         if num_steps > 1:
             raise ValueError("num_steps > 1 is not supported in ModelRunner")
@@ -1658,7 +1660,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 intermediate_tensors=intermediate_tensors,
                 **MultiModalKwargs.as_kwargs(multi_modal_kwargs,
                                              device=self.device),
-                **seqlen_agnostic_kwargs)
+                **seqlen_agnostic_kwargs,
+                **kwargs)
+
 
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):

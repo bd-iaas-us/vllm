@@ -548,7 +548,26 @@ async def benchmark(
 
     benchmark_start_time = time.perf_counter()
     tasks: List[asyncio.Task] = []
-    async for request in get_request(input_requests, request_rate, burstiness):
+    # async for request in get_request(input_requests, request_rate, burstiness):
+    #     prompt, prompt_len, output_len, mm_content = request
+    #     request_func_input = RequestFuncInput(model=model_id,
+    #                                           prompt=prompt,
+    #                                           api_url=api_url,
+    #                                           prompt_len=prompt_len,
+    #                                           output_len=output_len,
+    #                                           logprobs=logprobs,
+    #                                           best_of=best_of,
+    #                                           multi_modal_content=mm_content,
+    #                                           ignore_eos=ignore_eos)
+    #     tasks.append(
+    #         asyncio.create_task(
+    #             limited_request_func(request_func_input=request_func_input,
+    #                                  pbar=pbar)))
+    # outputs: List[RequestFuncOutput] = await asyncio.gather(*tasks)
+
+
+    outputs = []
+    async for request in get_request(input_requests, request_rate):
         prompt, prompt_len, output_len, mm_content = request
         request_func_input = RequestFuncInput(model=model_id,
                                               prompt=prompt,
@@ -559,11 +578,10 @@ async def benchmark(
                                               best_of=best_of,
                                               multi_modal_content=mm_content,
                                               ignore_eos=ignore_eos)
-        tasks.append(
-            asyncio.create_task(
-                limited_request_func(request_func_input=request_func_input,
-                                     pbar=pbar)))
-    outputs: List[RequestFuncOutput] = await asyncio.gather(*tasks)
+        # Await the request_func call directly to ensure each request completes before the next
+        output = await request_func(request_func_input=request_func_input,
+                                    pbar=pbar)
+        outputs.append(output)  # Collect each result one by one
 
     if profile:
         print("Stopping profiler...")
@@ -584,6 +602,17 @@ async def benchmark(
         pbar.close()
 
     benchmark_duration = time.perf_counter() - benchmark_start_time
+
+    for index, input in enumerate(input_requests):
+        print(f"______________--{index}--______________")
+        print(input)
+
+    for index, output in enumerate(outputs):
+        print(f"______________--{index}--______________")
+        print(output.generated_text)
+
+    for index, output in enumerate(outputs):
+        print(f"-{index}--", output.prompt_len, output.ttft)
 
     metrics, actual_output_lens = calculate_metrics(
         input_requests=input_requests,

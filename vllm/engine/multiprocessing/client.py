@@ -144,16 +144,17 @@ class MQLLMEngineClient(EngineClient):
         """Background loop that continually checks to ensure the engine process
         is still alive.
         """
+        pass
         try:
             while True:
                 # Check if the engine process is running:
                 if not self._engine_process.is_running() or (
                         self._engine_process.status() == psutil.STATUS_ZOMBIE):
                     # NB: is_running() returns True for zombies
-                    self._set_errored(
-                        RuntimeError(
-                            f"Engine process (pid {self._engine_process.pid}) "
-                            "died."))
+                    # self._set_errored(
+                    #     RuntimeError(
+                    #         f"Engine process (pid {self._engine_process.pid}) "
+                    #         "died."))
                     break
 
                 if await self.heartbeat_socket.poll(timeout=timeout):
