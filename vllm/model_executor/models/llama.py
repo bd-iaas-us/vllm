@@ -593,8 +593,7 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
     ) -> Union[torch.Tensor, IntermediateTensors]:
         model_output = self.model(input_ids, positions, kv_caches,
                                   attn_metadata, intermediate_tensors,
-                                  inputs_embeds,**kwargs)
-        
+                                  inputs_embeds, **kwargs)
 
         return model_output
 

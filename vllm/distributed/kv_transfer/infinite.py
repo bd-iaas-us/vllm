@@ -130,7 +130,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         return block_offsets
 
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
-                      prompt_seq_lengths: torch.Tensor,
+                      prompt_seq_lengths: List[int],
                       slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
@@ -148,7 +148,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         logger.debug("Saved kv_cache for layer %s", layer_idx)
 
     def read_kv_cache(self, prompt_token_page_hashes: List[str],
-                      prompt_seq_lengths: torch.Tensor,
+                      prompt_seq_lengths: List[int],
                       slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
@@ -166,7 +166,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         logger.debug("Loaded kv_cache for layer %s", layer_idx)
 
     def save_hidden_states(self, prompt_token_page_hashes: List[str],
-                           prompt_seq_lengths: torch.Tensor,
+                           prompt_seq_lengths: List[int],
                            hidden_states: torch.Tensor) -> None:
 
         self.conn.register_mr(hidden_states)
@@ -188,7 +188,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         logger.debug("Saved hidden_states")
 
     def read_hidden_states(self, prompt_token_page_hashes: List[str],
-                           prompt_seq_lengths: torch.Tensor,
+                           prompt_seq_lengths: List[int],
                            hidden_states: torch.Tensor) -> None:
 
         self.conn.register_mr(hidden_states)

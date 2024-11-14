@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 import httpx
-import asyncio
 
 # OpenTelemetry imports
 from opentelemetry import trace
