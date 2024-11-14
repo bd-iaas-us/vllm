@@ -105,7 +105,8 @@ def prepare_kv_cache_transport(input_ids, attn_metadata, cache_config, kwargs):
 
     fp_type = map_to_forward_pass_type(fp_type)
 
-    if fp_type == ForwardPassType.FIRST_DECODE and len(request_ids) != len(attn_metadata.seq_lens):
+    if fp_type == ForwardPassType.FIRST_DECODE and len(request_ids) != len(
+            attn_metadata.seq_lens):
         raise ValueError(
             "The number of request_ids should be equal to the number of sequences."
         )
