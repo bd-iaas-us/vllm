@@ -24,7 +24,7 @@ class KVCacheTransporterBase(ABC):
     @abstractmethod
     def save_hidden_states(self, prompt_token_page_hashes: List[str],
                            prompt_seq_lengths: List[int],
-                           hidden_states: torch.Tensor):
+                           hidden_states: torch.Tensor) ->None:
 
         raise NotImplementedError
 
@@ -33,6 +33,14 @@ class KVCacheTransporterBase(ABC):
                            prompt_seq_lengths: List[int],
                            hidden_states: torch.Tensor):
 
+        raise NotImplementedError
+    
+    @abstractmethod
+    def key_exists(self, key: str) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_match_last_index(self, keys: List[str]) -> int:
         raise NotImplementedError
 
     @abstractmethod

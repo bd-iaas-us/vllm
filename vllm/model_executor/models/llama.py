@@ -334,7 +334,7 @@ class LlamaModel(nn.Module):
         fp_type, kv_cache_transporter, request_ids, input_token_hashes, slot_mapping_tensor, prompt_lens = (
             prepare_kv_cache_transport(input_ids, attn_metadata,
                                        self.cache_config, kwargs))
-
+        
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -346,11 +346,13 @@ class LlamaModel(nn.Module):
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
-        # for i in range(self.start_layer, self.end_layer):
-        #     layer = self.layers[i]
-        #     hidden_states, residual = layer(positions, hidden_states,
-        #                                     kv_caches[i - self.start_layer],
-        #                                     attn_metadata, residual)
+        if fp_type == ForwardPassType.PREFILL:
+            # hidden_states is the last piece info to save
+            # we assume kv_cache are saved properly
+            hidden_state_key = f"{self.config.name_or_path}_{input_token_hashes[-1]}_hidden_states"
+            if kv_cache_transporter.key_exists(hidden_state_key):
+                return hidden_states
+
         if fp_type == ForwardPassType.FIRST_DECODE:
             retrieve_hidden_state(kv_cache_transporter, request_ids, input_ids,
                                   input_token_hashes, attn_metadata,

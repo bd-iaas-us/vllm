@@ -209,6 +209,13 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         logger.debug("Loaded hidden_states")
 
+
+    def key_exists(self, key: str) -> bool:
+        return self.conn.check_exist(key)
+
+    def get_match_last_index(self, keys: List[str]) -> int:
+        return self.conn.get_match_last_index(keys)
+
     def synchronize(self) -> None:
         try:
             self.conn.sync()
