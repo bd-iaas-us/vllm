@@ -39,8 +39,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 log_level="info",
                 connection_type=infinistore.TYPE_RDMA,
                 ib_port=1,
-                link_type="IB",
-                dev_name="mlx5_1",
+                link_type="Ethernet",
+                dev_name="mlx5_0",
             )
             InfiniStoreKVCacheTransporter._singleton_conn = infinistore.InfinityConnection(
                 infinte_config)
