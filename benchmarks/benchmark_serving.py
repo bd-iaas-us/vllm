@@ -128,6 +128,63 @@ def sample_sharegpt_requests(
 
     return filtered_dataset
 
+def sample_booksum_requests(
+    dataset_path: str,
+    num_requests: int,
+    tokenizer: PreTrainedTokenizerBase,
+    fix_prompt_len: int = 100,
+    fixed_output_len: int = 1,
+) -> List[Tuple[str, int, int, None]]:
+    
+    import csv
+    import sys  # To access sys.maxsize if needed
+
+    # Set the maximum field size limit to a reasonable value
+    MAX_FIELD_SIZE_LIMIT =2_000_000  # Adjust this value as needed
+    csv.field_size_limit(MAX_FIELD_SIZE_LIMIT)
+    
+    column_name = "chapter"
+
+    filtered_dataset: List[Tuple[str, int, int]] = []
+
+
+    with open(dataset_path, newline='') as csvfile: #, open("/tmp/prompt_15k_to_50k.csv", 'w', newline='') as outfile:
+        csvreader = csv.DictReader(csvfile)
+        # fieldnames = csvreader.fieldnames
+        # writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+        # writer.writeheader()
+
+        for row in csvreader:
+            if len(filtered_dataset) == num_requests:
+                break
+            prompt = row[column_name]
+            prompt_size = len(prompt.encode('utf-8'))
+            if prompt_size > MAX_FIELD_SIZE_LIMIT:
+                print(f"Skipping entry: field size {prompt_size} exceeds limit.")
+                continue
+
+            prompt_token_ids = tokenizer(prompt).input_ids
+
+            prompt_len = len(prompt_token_ids)
+
+            # if 15000 <= prompt_len <= 50000:
+            #     writer.writerow(row)
+
+            if prompt_len < fix_prompt_len:
+                continue
+
+            print(f"Prompt len: {prompt_len}, found {len(filtered_dataset)+1}")
+            
+            filtered_dataset.append((prompt[:fix_prompt_len], fix_prompt_len, fixed_output_len, None))
+
+    
+    if len(filtered_dataset) < num_requests:
+        raise ValueError(
+            f"Only {len(filtered_dataset)} qualified entries found in the dataset. "
+            "Please consider decreasing the number of requests or using a different dataset.")
+
+    return filtered_dataset
+
 
 def sample_sonnet_requests(
     dataset_path: str,
@@ -748,6 +805,15 @@ def main(args: argparse.Namespace):
             fixed_output_len=args.sharegpt_output_len,
         )
 
+    elif args.dataset_name == "booksum":
+        input_requests = sample_booksum_requests(
+            dataset_path=args.dataset_path,
+            num_requests=args.num_prompts,
+            tokenizer=tokenizer,
+            fix_prompt_len=args.booksum_fix_prompt_len,
+            fixed_output_len=args.sharegpt_output_len,
+        )
+
     elif args.dataset_name == "sonnet":
         # Do not format the prompt, pass to message directly
         if args.backend == "openai-chat":
@@ -907,7 +973,7 @@ if __name__ == "__main__":
         "--dataset-name",
         type=str,
         default="sharegpt",
-        choices=["sharegpt", "sonnet", "random", "hf"],
+        choices=["sharegpt", "sonnet", "random", "hf", "booksum"],
         help="Name of the dataset to benchmark on.",
     )
     parser.add_argument("--dataset-path",
@@ -1143,6 +1209,13 @@ if __name__ == "__main__":
         default=None,
         help="Output length for each request. Overrides the output lengths "
         "from the sampled HF dataset.",
+    )
+
+    hf_group.add_argument(
+        "--booksum-fix-prompt-len",
+        type=int,
+        default=100,
+        help="Number of prompt tokens.",
     )
 
     args = parser.parse_args()
