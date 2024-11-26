@@ -537,6 +537,9 @@ async def benchmark(
         raise ValueError(f"Unknown backend: {backend}")
 
     print("Starting initial single prompt test run...")
+    
+    print(input_requests[0])
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
     test_prompt, test_prompt_len, test_output_len, test_mm_content = (
         input_requests[0])
     if backend != "openai-chat" and test_mm_content is not None:
