@@ -255,6 +255,16 @@ class LocalOrDistributedWorkerBase(WorkerBase):
 
         kwargs = extract_previous_hidden_states(broadcast_data)
 
+        if is_decode_run(model_input.input_tokens):
+            request_ids = sorted(
+                broadcast_data['request_ids_to_seq_ids'].keys(),
+                key=lambda k:broadcast_data['request_ids_to_seq_ids'][k][0]  # Use the first element of the value list
+            )
+
+            kwargs.update({
+                'request_ids': request_ids,
+            })
+
         return model_input, worker_input, kwargs
 
     def _get_driver_input_and_broadcast(
@@ -283,6 +293,16 @@ class LocalOrDistributedWorkerBase(WorkerBase):
             model_input = dataclasses.replace(  # type: ignore
                 model_input,
                 async_callback=execute_model_req.async_callback)
+            
+        if is_decode_run(model_input.input_tokens):
+            request_ids = [
+                seq.request_id
+                for seq in execute_model_req.seq_group_metadata_list
+            ]
+
+            kwargs.update({
+                'request_ids': request_ids,
+            })
 
         return model_input, worker_input, kwargs
 
@@ -340,10 +360,6 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                 orig_model_execute_time = intermediate_tensors.tensors.get(
                     "model_execute_time", torch.tensor(0)).item()
 
-        pd_sep_kwargs = self.prepare_pd_sep_kwargs(model_input,
-                                                   execute_model_req,
-                                                   worker_input)
-        kwargs.update(pd_sep_kwargs)
         output = self.model_runner.execute_model(
             model_input=model_input,
             kv_caches=self.kv_cache[worker_input.virtual_engine]
@@ -372,21 +388,6 @@ class LocalOrDistributedWorkerBase(WorkerBase):
 
         # output is List[SamplerOutput]
         return output
-
-    def prepare_pd_sep_kwargs(self, model_input, execute_model_req,
-                              worker_input) -> Dict[str, torch.Tensor]:
-
-        kwargs = {}
-        if is_decode_run(model_input.input_tokens):
-            request_ids = [
-                seq.request_id
-                for seq in execute_model_req.seq_group_metadata_list
-            ]
-            kwargs.update({
-                'request_ids': request_ids,
-            })
-
-        return kwargs
 
     def _execute_model_spmd(
         self,

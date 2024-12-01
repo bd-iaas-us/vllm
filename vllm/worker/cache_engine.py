@@ -96,7 +96,8 @@ class CacheEngine:
                             pin_memory=pin_memory,
                             device=device))
 
-            if self.cache_config.kv_cache_transporter is not None and device != "cpu":
+            # print(f"~~~~~~~~~~ kv_cache memory: {kv_cache[-1].element_size() * kv_cache[-1].numel()/(1024**2):.2f} MB")
+            if self.cache_config.kv_cache_transporter is not None and self.cache_config.kv_cache_transporter.conn.rdma_connected and device != "cpu":
                 self.cache_config.kv_cache_transporter.conn.register_mr(
                     kv_cache[-1])
 

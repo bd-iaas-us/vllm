@@ -7,6 +7,8 @@ import os
 import infinistore
 
 from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
+from vllm.distributed import (get_tensor_model_parallel_rank,
+                              get_tensor_model_parallel_world_size)
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +39,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 host_addr=infinite_server,
                 service_port=22345,
                 log_level="info",
-                connection_type=infinistore.TYPE_RDMA,
+                connection_type=infinistore.TYPE_LOCAL_GPU,
                 ib_port=1,
                 link_type="Ethernet",
                 dev_name="mlx5_0",
@@ -51,6 +53,9 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         # Assign the singleton connection to the instance attribute
         self.conn = InfiniStoreKVCacheTransporter._singleton_conn
+
+        self.tp_size = get_tensor_model_parallel_world_size()
+        self.tp_rank = get_tensor_model_parallel_rank()
 
     def _compute_kv_cache_block_offsets(
             self, prompt_token_page_hashes: List[str], seq_lens: List[int],
@@ -73,8 +78,9 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 current_hash = prompt_token_page_hashes[page_idx]
 
                 # Generate cache keys for the current page
-                k_cache_key = f"{self.model}_{current_hash}_layer_{layer_idx}_k"
-                v_cache_key = f"{self.model}_{current_hash}_layer_{layer_idx}_v"
+                cache_key = f"{self.model}_{current_hash}_layer_{layer_idx}_tp{self.tp_rank}/{self.tp_size}"
+                k_cache_key = cache_key + "_k"
+                v_cache_key = cache_key + "_v"
 
                 # Calculate offset in the kv_cache
                 try:
@@ -115,7 +121,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 current_hash = prompt_token_page_hashes[page_start_index +
                                                         page_num]
 
-                cache_key = f"{self.model}_{current_hash}_hidden_states"
+                cache_key = f"{self.model}_{current_hash}_tp{self.tp_rank}/{self.tp_size}_hs"
 
                 cache_size = hidden_size * (end_token_idx - start_token_idx)
                 offset = (seq_start_index + start_token_idx) * hidden_size
@@ -169,7 +175,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                            prompt_seq_lengths: List[int],
                            hidden_states: torch.Tensor) -> None:
 
-        self.conn.register_mr(hidden_states)
+        if self.conn.rdma_connected:
+            self.conn.register_mr(hidden_states)
         print("1------- register mr done")
         block_offsets = self._compute_hidden_states_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, hidden_states)
@@ -190,8 +197,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     def read_hidden_states(self, prompt_token_page_hashes: List[str],
                            prompt_seq_lengths: List[int],
                            hidden_states: torch.Tensor) -> None:
-
-        self.conn.register_mr(hidden_states)
+        if self.conn.rdma_connected:
+            self.conn.register_mr(hidden_states)
         print("1------- register mr done")
         block_offsets = self._compute_hidden_states_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, hidden_states)
