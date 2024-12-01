@@ -52,6 +52,9 @@ try:
     from vllm.utils import FlexibleArgumentParser
 except ImportError:
     from argparse import ArgumentParser as FlexibleArgumentParser
+import asyncio
+import pynvml
+import time
 
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000
 
@@ -125,6 +128,61 @@ def sample_sharegpt_requests(
             # Prune too long sequences.
             continue
         filtered_dataset.append((prompt, prompt_len, output_len, None))
+
+    return filtered_dataset
+
+def sample_booksum_requests(
+    dataset_path: str,
+    num_requests: int,
+    tokenizer: PreTrainedTokenizerBase,
+    fix_prompt_len: int = 100,
+    fixed_output_len: int = 1,
+) -> List[Tuple[str, int, int, None]]:
+    
+    import csv
+    import sys  # To access sys.maxsize if needed
+
+    # Set the maximum field size limit to a reasonable value
+    MAX_FIELD_SIZE_LIMIT =2_000_000  # Adjust this value as needed
+    csv.field_size_limit(MAX_FIELD_SIZE_LIMIT)
+    
+    column_name = "chapter"
+
+    filtered_dataset: List[Tuple[str, int, int]] = []
+
+
+    with open(dataset_path, newline='') as csvfile: #, open("/tmp/prompt_15k_to_50k.csv", 'w', newline='') as outfile:
+        csvreader = csv.DictReader(csvfile)
+        # fieldnames = csvreader.fieldnames
+        # writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+        # writer.writeheader()
+
+        for row in csvreader:
+            if len(filtered_dataset) == num_requests:
+                break
+            prompt = row[column_name]
+            prompt_size = len(prompt.encode('utf-8'))
+            if prompt_size > MAX_FIELD_SIZE_LIMIT:
+                print(f"Skipping entry: field size {prompt_size} exceeds limit.")
+                continue
+
+            prompt_token_ids = tokenizer(prompt).input_ids
+
+            prompt_len = len(prompt_token_ids)
+
+            # if 15000 <= prompt_len <= 50000:
+            #     writer.writerow(row)
+
+            if prompt_len < fix_prompt_len:
+                continue
+            
+            filtered_dataset.append((prompt[:fix_prompt_len], fix_prompt_len, fixed_output_len, None))
+
+    
+    if len(filtered_dataset) < num_requests:
+        raise ValueError(
+            f"Only {len(filtered_dataset)} qualified entries found in the dataset. "
+            "Please consider decreasing the number of requests or using a different dataset.")
 
     return filtered_dataset
 
@@ -480,6 +538,7 @@ async def benchmark(
         raise ValueError(f"Unknown backend: {backend}")
 
     print("Starting initial single prompt test run...")
+    
     test_prompt, test_prompt_len, test_output_len, test_mm_content = (
         input_requests[0])
     if backend != "openai-chat" and test_mm_content is not None:
@@ -548,26 +607,7 @@ async def benchmark(
 
     benchmark_start_time = time.perf_counter()
     tasks: List[asyncio.Task] = []
-    # async for request in get_request(input_requests, request_rate, burstiness):
-    #     prompt, prompt_len, output_len, mm_content = request
-    #     request_func_input = RequestFuncInput(model=model_id,
-    #                                           prompt=prompt,
-    #                                           api_url=api_url,
-    #                                           prompt_len=prompt_len,
-    #                                           output_len=output_len,
-    #                                           logprobs=logprobs,
-    #                                           best_of=best_of,
-    #                                           multi_modal_content=mm_content,
-    #                                           ignore_eos=ignore_eos)
-    #     tasks.append(
-    #         asyncio.create_task(
-    #             limited_request_func(request_func_input=request_func_input,
-    #                                  pbar=pbar)))
-    # outputs: List[RequestFuncOutput] = await asyncio.gather(*tasks)
-
-
-    outputs = []
-    async for request in get_request(input_requests, request_rate):
+    async for request in get_request(input_requests, request_rate, burstiness):
         prompt, prompt_len, output_len, mm_content = request
         request_func_input = RequestFuncInput(model=model_id,
                                               prompt=prompt,
@@ -578,10 +618,11 @@ async def benchmark(
                                               best_of=best_of,
                                               multi_modal_content=mm_content,
                                               ignore_eos=ignore_eos)
-        # Await the request_func call directly to ensure each request completes before the next
-        output = await request_func(request_func_input=request_func_input,
-                                    pbar=pbar)
-        outputs.append(output)  # Collect each result one by one
+        tasks.append(
+            asyncio.create_task(
+                limited_request_func(request_func_input=request_func_input,
+                                     pbar=pbar)))
+    outputs: List[RequestFuncOutput] = await asyncio.gather(*tasks)
 
     if profile:
         print("Stopping profiler...")
@@ -602,17 +643,6 @@ async def benchmark(
         pbar.close()
 
     benchmark_duration = time.perf_counter() - benchmark_start_time
-
-    for index, input in enumerate(input_requests):
-        print(f"______________--{index}--______________")
-        print(input)
-
-    for index, output in enumerate(outputs):
-        print(f"______________--{index}--______________")
-        print(output.generated_text)
-
-    for index, output in enumerate(outputs):
-        print(f"-{index}--", output.prompt_len, output.ttft)
 
     metrics, actual_output_lens = calculate_metrics(
         input_requests=input_requests,
@@ -736,6 +766,37 @@ def parse_goodput(slo_pairs):
             "number in milliseconds.") from err
     return gootput_config_dict
 
+async def collect_gpu_utilization(data_dict, stop_event, interval=1):
+    # Initialize NVML
+    pynvml.nvmlInit()
+    try:
+        # Parse CUDA_VISIBLE_DEVICES
+        visible_devices = os.getenv("CUDA_VISIBLE_DEVICES")
+        if visible_devices is None:
+            visible_indices = range(pynvml.nvmlDeviceGetCount())  # Use all GPUs if the variable is not set
+        else:
+            visible_indices = [int(index) for index in visible_devices.split(",") if index.isdigit()]
+
+        # Initialize dictionary keys for each GPU
+        for i in visible_indices:
+            data_dict[f"GPU-{i} utilization"] = []
+
+        while not stop_event.is_set():
+            timestamp = time.time()
+            for i in visible_indices:
+                try:
+                    handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+                    util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+
+                    # Append gpu_utilization to the list for the respective GPU
+                    data_dict[f"GPU-{i} utilization"].append(util.gpu)
+                except pynvml.NVMLError as e:
+                    print(f"Failed to get data for GPU {i}: {e}")
+            await asyncio.sleep(interval)
+    finally:
+        # Shutdown NVML when done
+        pynvml.nvmlShutdown()
+
 
 def main(args: argparse.Namespace):
     print(args)
@@ -775,6 +836,15 @@ def main(args: argparse.Namespace):
             num_requests=args.num_prompts,
             tokenizer=tokenizer,
             fixed_output_len=args.sharegpt_output_len,
+        )
+
+    elif args.dataset_name == "booksum":
+        input_requests = sample_booksum_requests(
+            dataset_path=args.dataset_path,
+            num_requests=args.num_prompts,
+            tokenizer=tokenizer,
+            fix_prompt_len=args.booksum_fix_prompt_len,
+            fixed_output_len=args.booksum_output_len,
         )
 
     elif args.dataset_name == "sonnet":
@@ -833,28 +903,79 @@ def main(args: argparse.Namespace):
 
     gootput_config_dict = check_goodput_args(args)
 
-    benchmark_result = asyncio.run(
-        benchmark(
-            backend=backend,
-            api_url=api_url,
-            base_url=base_url,
-            model_id=model_id,
-            tokenizer=tokenizer,
-            input_requests=input_requests,
-            logprobs=args.logprobs,
-            best_of=args.best_of,
-            request_rate=args.request_rate,
-            burstiness=args.burstiness,
-            disable_tqdm=args.disable_tqdm,
-            profile=args.profile,
-            selected_percentile_metrics=args.percentile_metrics.split(","),
-            selected_percentiles=[
-                float(p) for p in args.metric_percentiles.split(",")
-            ],
-            ignore_eos=args.ignore_eos,
-            gootput_config_dict=gootput_config_dict,
-            max_concurrency=args.max_concurrency,
-        ))
+    # benchmark_result = asyncio.run(
+    #     benchmark(
+    #         backend=backend,
+    #         api_url=api_url,
+    #         base_url=base_url,
+    #         model_id=model_id,
+    #         tokenizer=tokenizer,
+    #         input_requests=input_requests,
+    #         logprobs=args.logprobs,
+    #         best_of=args.best_of,
+    #         request_rate=args.request_rate,
+    #         burstiness=args.burstiness,
+    #         disable_tqdm=args.disable_tqdm,
+    #         profile=args.profile,
+    #         selected_percentile_metrics=args.percentile_metrics.split(","),
+    #         selected_percentiles=[
+    #             float(p) for p in args.metric_percentiles.split(",")
+    #         ],
+    #         ignore_eos=args.ignore_eos,
+    #         gootput_config_dict=gootput_config_dict,
+    #         max_concurrency=args.max_concurrency,
+    #     ))
+
+    async def run_benchmark_and_collect_gpu():
+        # Initialize the list to hold GPU utilization data
+        gpu_utilization_data = {}
+
+        # Create an asyncio Event for stopping the GPU collection task
+        stop_event = asyncio.Event()
+
+        # Start the GPU utilization collection task
+        gpu_task = asyncio.create_task(
+            collect_gpu_utilization(gpu_utilization_data, stop_event, args.gpu_metric_interval)
+        )
+
+        try:
+            # Run the benchmark
+            benchmark_result = await benchmark(
+                backend=backend,
+                api_url=api_url,
+                base_url=base_url,
+                model_id=model_id,
+                tokenizer=tokenizer,
+                input_requests=input_requests,
+                logprobs=args.logprobs,
+                best_of=args.best_of,
+                request_rate=args.request_rate,
+                burstiness=args.burstiness,
+                disable_tqdm=args.disable_tqdm,
+                profile=args.profile,
+                selected_percentile_metrics=args.percentile_metrics.split(","),
+                selected_percentiles=[
+                    float(p) for p in args.metric_percentiles.split(",")
+                ],
+                ignore_eos=args.ignore_eos,
+                gootput_config_dict=gootput_config_dict,
+                max_concurrency=args.max_concurrency,
+            )
+        finally:
+            # Stop the GPU collection task
+            stop_event.set()
+            await gpu_task
+
+        # Now, gpu_utilization_data contains the collected data
+        # You can process or save it as needed
+        # For example:
+        print("Collected GPU Utilization Data:")
+        for gpu, data in gpu_utilization_data.items():
+            print(f"{gpu}: {data}")
+
+    # Run the asynchronous function
+    asyncio.run(run_benchmark_and_collect_gpu())
+
 
     # Save config and results to json
     if args.save_result:
@@ -936,7 +1057,7 @@ if __name__ == "__main__":
         "--dataset-name",
         type=str,
         default="sharegpt",
-        choices=["sharegpt", "sonnet", "random", "hf"],
+        choices=["sharegpt", "sonnet", "random", "hf", "booksum"],
         help="Name of the dataset to benchmark on.",
     )
     parser.add_argument("--dataset-path",
@@ -1093,6 +1214,26 @@ if __name__ == "__main__":
         "\"ttft\", \"tpot\", \"e2el\". For more context on the definition of "
         "goodput, refer to DistServe paper: https://arxiv.org/pdf/2401.09670 "
         "and the blog: https://hao-ai-lab.github.io/blogs/distserve")
+    
+    parser.add_argument(
+        "--gpu-metric-interval",
+        type=float,
+        default=1,
+        help="Interval in seconds to collect GPU utilization data.",
+    )
+    
+    booksum_group = parser.add_argument_group("booksum dataset options")
+    booksum_group.add_argument(
+        "--booksum-fix-prompt-len",
+        type=int,
+        default=100,
+        help="Number of prompt tokens.",
+    )
+    booksum_group.add_argument(
+        "--booksum-output-len",
+        type=int,
+        default=None,
+        help="Output length for each request..")
 
     # group for dataset specific arguments
     sonnet_group = parser.add_argument_group("sonnet dataset options")
