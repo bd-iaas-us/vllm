@@ -33,8 +33,7 @@ from vllm.distributed import (get_pp_group, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
 from vllm.distributed.kv_transfer.utils import (ForwardPassType,
                                                 prepare_kv_cache_transport,
-                                                finalize_kv_cache_transport,
-                                                retrieve_hidden_state)
+                                                finalize_kv_cache_transport,)
 from vllm.model_executor.layers.activation import SiluAndMul
 from vllm.model_executor.layers.layernorm import RMSNorm
 from vllm.model_executor.layers.linear import (MergedColumnParallelLinear,
@@ -331,7 +330,7 @@ class LlamaModel(nn.Module):
         inputs_embeds: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Union[torch.Tensor, IntermediateTensors]:
-        fp_type, kv_cache_transporter, request_ids, input_token_hashes, slot_mapping_tensor, prompt_lens = (
+        fp_type, kv_cache_transporter, input_token_hashes = (
             prepare_kv_cache_transport(input_ids, attn_metadata,
                                        self.cache_config, kwargs))
         
@@ -349,33 +348,21 @@ class LlamaModel(nn.Module):
         if fp_type == ForwardPassType.PREFILL:
             # hidden_states is the last piece info to save
             # we assume kv_cache are saved properly
-            hidden_state_key = f"{self.config.name_or_path}_{input_token_hashes[-1]}_hidden_states"
+            hidden_state_key = kv_cache_transporter.get_hidden_states_cache_key(input_token_hashes[-1])
             if kv_cache_transporter.key_exists(hidden_state_key):
                 return hidden_states
 
         if fp_type == ForwardPassType.FIRST_DECODE:
-            retrieve_hidden_state(kv_cache_transporter, request_ids, input_ids,
-                                  input_token_hashes, attn_metadata,
-                                  hidden_states)
-            return hidden_states
-
-        if fp_type == ForwardPassType.SECOND_DECODE:
-            kv_cache_transporter.read_kv_cache(input_token_hashes, prompt_lens,
-                                               slot_mapping_tensor, 0,
-                                               kv_caches[0])
-
             for i in range(self.start_layer, self.end_layer):
-                kv_cache_transporter.synchronize()
-                if i < self.end_layer - 1:
-                    kv_cache_transporter.read_kv_cache(input_token_hashes,
-                                                       prompt_lens,
-                                                       slot_mapping_tensor,
-                                                       i + 1, kv_caches[i + 1])
-
-                layer = self.layers[i]
-                hidden_states, residual = layer(
-                    positions, hidden_states, kv_caches[i - self.start_layer],
-                    attn_metadata, residual)
+                kv_cache_transporter.read_kv_cache(input_token_hashes,
+                                                    attn_metadata.seq_lens,
+                                                    attn_metadata.slot_mapping,
+                                                    i, kv_caches[i])               
+            kv_cache_transporter.read_hidden_states(input_token_hashes,
+                                            attn_metadata.seq_lens,
+                                            hidden_states)
+            kv_cache_transporter.synchronize()
+            return hidden_states
         else:
             for i in range(self.start_layer, self.end_layer):
                 layer = self.layers[i]
@@ -387,7 +374,7 @@ class LlamaModel(nn.Module):
                     kv_cache_transporter.save_kv_cache(
                         input_token_hashes, attn_metadata.seq_lens,
                         attn_metadata.slot_mapping, i,
-                        kv_caches[i - self.start_layer])
+                        kv_caches[i])
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
@@ -397,7 +384,7 @@ class LlamaModel(nn.Module):
 
         hidden_states, _ = self.norm(hidden_states, residual)
 
-        finalize_kv_cache_transport(fp_type, request_ids, kv_cache_transporter,
+        finalize_kv_cache_transport(fp_type, kv_cache_transporter,
                                     input_token_hashes, attn_metadata,
                                     hidden_states)
 

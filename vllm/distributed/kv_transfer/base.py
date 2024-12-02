@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import torch
-from typing import List
+from typing import List, Tuple
 
 
 class KVCacheTransporterBase(ABC):
@@ -33,6 +33,12 @@ class KVCacheTransporterBase(ABC):
                            prompt_seq_lengths: List[int],
                            hidden_states: torch.Tensor):
 
+        raise NotImplementedError
+    
+    def get_hidden_states_cache_key(self, page_hash: str) -> str:
+        raise NotImplementedError
+    
+    def get_kv_cache_key(self, page_hash: str, layer_idx: int) -> Tuple[str, str]:
         raise NotImplementedError
     
     @abstractmethod

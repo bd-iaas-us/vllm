@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 import httpx
@@ -16,8 +17,7 @@ from opentelemetry.semconv.resource import ResourceAttributes
 from opentelemetry.trace import Status, StatusCode
 
 # Initialize the tracer provider with a resource containing the service name
-resource = Resource(
-    attributes={ResourceAttributes.SERVICE_NAME: "pd-sep-vllm_proxy"})
+resource = Resource(attributes={ResourceAttributes.SERVICE_NAME: "pd-sep-vllm_proxy"})
 
 trace.set_tracer_provider(TracerProvider(resource=resource))
 
@@ -25,8 +25,7 @@ trace.set_tracer_provider(TracerProvider(resource=resource))
 otlp_exporter = OTLPSpanExporter(endpoint="localhost:4317", insecure=True)
 
 # Add the BatchSpanProcessor to the tracer provider
-trace.get_tracer_provider().add_span_processor(
-    BatchSpanProcessor(otlp_exporter))
+trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(otlp_exporter))
 
 # Set the global propagator to TraceContext
 set_global_textmap(TraceContextTextMapPropagator())
@@ -55,10 +54,8 @@ async def startup_event():
     Initialize persistent HTTPX clients for vLLM services on startup.
     """
     HTTPXClientInstrumentor().instrument()
-    app.state.vllm2_client = httpx.AsyncClient(timeout=None,
-                                               base_url=VLLM_2_BASE_URL)
-    app.state.vllm1_client = httpx.AsyncClient(timeout=None,
-                                               base_url=VLLM_1_BASE_URL)
+    app.state.vllm2_client = httpx.AsyncClient(timeout=None, base_url=VLLM_2_BASE_URL)
+    app.state.vllm1_client = httpx.AsyncClient(timeout=None, base_url=VLLM_1_BASE_URL)
 
 
 @app.on_event("shutdown")
@@ -70,20 +67,11 @@ async def shutdown_event():
     await app.state.vllm2_client.aclose()
 
 
-async def send_request_to_vllm(client: httpx.AsyncClient,
-                               req_data: dict) -> httpx.Response:
+async def send_request_to_vllm(client: httpx.AsyncClient, req_data: dict):
     """
-    Send a request to a vLLM process using a persistent client and return the response.
-
-    Args:
-        client (httpx.AsyncClient): The persistent HTTPX client.
-        req_data (dict): The JSON payload to send.
-
-    Returns:
-        httpx.Response: The response from the vLLM service.
+    Send a request to a vLLM process using a persistent client.
     """
-    response = await client.post("/completions",
-                                 json=req_data)  # Correct endpoint path
+    response = await client.post("/completions", json=req_data)  # Correct endpoint path
     response.raise_for_status()
     return response
 
@@ -99,9 +87,7 @@ async def stream_vllm_response(client: httpx.AsyncClient, req_data: dict):
     Yields:
         bytes: Chunks of the response data.
     """
-    async with client.stream(
-            "POST", "/completions",
-            json=req_data) as response:  # Correct endpoint path
+    async with client.stream("POST", "/completions", json=req_data) as response:  # Correct endpoint path
         response.raise_for_status()
         async for chunk in response.aiter_bytes():
             yield chunk
@@ -118,54 +104,35 @@ async def proxy_request(request: Request):
     Returns:
         StreamingResponse: The streamed response from the second vLLM service.
     """
-    # Extract the incoming request JSON data
     req_data = await request.json()
 
-    # Start a new span for the proxy request
     with tracer.start_as_current_span("proxy-request-span") as proxy_span:
         proxy_span.set_attribute("http.method", request.method)
         proxy_span.set_attribute("http.url", str(request.url))
         proxy_span.set_attribute("client.ip", request.client.host)
 
-        # Span for sending request to vLLM-1
-        with tracer.start_as_current_span(
-                "send-to-prefill_vllm") as send_vllm1_span:
-            send_vllm1_span.set_attribute("vllm.url",
-                                          VLLM_1_BASE_URL + "/completions")
+        # Fire-and-forget request to vLLM-1
+        with tracer.start_as_current_span("send-to-prefill-vllm") as send_vllm1_span:
+            send_vllm1_span.set_attribute("vllm.url", VLLM_1_BASE_URL + "/completions")
             try:
-                # Send request to vLLM-1 using the persistent client
-                response1 = await send_request_to_vllm(app.state.vllm1_client,
-                                                       req_data)
-                send_vllm1_span.set_attribute("vllm.response.status_code",
-                                              response1.status_code)
+                # Use asyncio.create_task to avoid waiting for the response
+                asyncio.create_task(send_request_to_vllm(app.state.vllm1_client, req_data))
+                send_vllm1_span.set_status(Status(StatusCode.OK))
             except Exception as e:
                 send_vllm1_span.record_exception(e)
                 send_vllm1_span.set_status(Status(StatusCode.ERROR, str(e)))
-                raise
 
-        # Optionally, you can process response1 and modify req_data if needed
-        # For now, we'll proceed with the original req_data
-
-        # Span for sending request to vLLM-2
-        with tracer.start_as_current_span(
-                "send-to-decode-vllm") as send_vllm2_span:
-            send_vllm2_span.set_attribute("vllm.url",
-                                          VLLM_2_BASE_URL + "/completions")
+        # Proceed to vLLM-2 immediately
+        with tracer.start_as_current_span("send-to-decode-vllm") as send_vllm2_span:
+            send_vllm2_span.set_attribute("vllm.url", VLLM_2_BASE_URL + "/completions")
             try:
-                # Define a generator for streaming response
                 async def generate_stream():
-                    # Span for streaming response from vLLM-2
-                    with tracer.start_as_current_span(
-                            "stream-vllm2-response") as stream_span:
-                        async for chunk in stream_vllm_response(
-                                app.state.vllm2_client, req_data):
-                            # Optionally, set attributes or events for each chunk
+                    with tracer.start_as_current_span("stream-vllm2-response") as stream_span:
+                        async for chunk in stream_vllm_response(app.state.vllm2_client, req_data):
                             stream_span.add_event("Streaming chunk")
                             yield chunk
 
-                # Use StreamingResponse to stream the response back to the client
-                return StreamingResponse(generate_stream(),
-                                         media_type="application/json")
+                return StreamingResponse(generate_stream(), media_type="application/json")
             except Exception as e:
                 send_vllm2_span.record_exception(e)
                 send_vllm2_span.set_status(Status(StatusCode.ERROR, str(e)))
@@ -174,4 +141,5 @@ async def proxy_request(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -18,7 +18,6 @@ from vllm.utils import (enable_trace_function_call_for_thread,
 from vllm.worker.model_runner_base import (BroadcastableModelInput,
                                            ModelRunnerBase,
                                            ModelRunnerInputBase)
-from vllm.distributed.kv_transfer.utils import (is_decode_run)
 
 logger = init_logger(__name__)
 
@@ -255,16 +254,6 @@ class LocalOrDistributedWorkerBase(WorkerBase):
 
         kwargs = extract_previous_hidden_states(broadcast_data)
 
-        if is_decode_run(model_input.input_tokens):
-            request_ids = sorted(
-                broadcast_data['request_ids_to_seq_ids'].keys(),
-                key=lambda k:broadcast_data['request_ids_to_seq_ids'][k][0]  # Use the first element of the value list
-            )
-
-            kwargs.update({
-                'request_ids': request_ids,
-            })
-
         return model_input, worker_input, kwargs
 
     def _get_driver_input_and_broadcast(
@@ -293,16 +282,6 @@ class LocalOrDistributedWorkerBase(WorkerBase):
             model_input = dataclasses.replace(  # type: ignore
                 model_input,
                 async_callback=execute_model_req.async_callback)
-            
-        if is_decode_run(model_input.input_tokens):
-            request_ids = [
-                seq.request_id
-                for seq in execute_model_req.seq_group_metadata_list
-            ]
-
-            kwargs.update({
-                'request_ids': request_ids,
-            })
 
         return model_input, worker_input, kwargs
 
