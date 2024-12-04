@@ -14,7 +14,8 @@ from vllm.distributed import (get_tensor_model_parallel_rank,
 logger = logging.getLogger(__name__)
 
 Default_Infinite_Server = "127.0.0.1"
-interval = 0.001
+interval = 0.01
+count = 0
 
 class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     #Class-level singleton connection instance
@@ -29,7 +30,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         self.model = model
         self.tokens_per_page = tokens_per_page
 
-        #TODO: when server is local, use connection_type=infinistore.TYPE_GPU,
+        #TODO: when server is local, use connection_type=infinistore.TYPE_LOCAL_GPU,
         # otherwise RDMA
 
         infinite_server = os.environ.get("INFINITE_STORE_SERVER",
@@ -148,12 +149,31 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                       slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
+        # if layer_idx == 0:
+        #     print("Qian------ last hash: ", prompt_token_page_hashes[-1])
+
         block_offsets, page_size = self._compute_kv_cache_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
             layer_idx, kv_cache)
+        
+        try:            
+            if self.conn.rdma_connected:
+                self.conn.rdma_write_cache(kv_cache, block_offsets, page_size)
+            else:
+                self.conn.local_gpu_write_cache(kv_cache, block_offsets, page_size)
 
-        try:
-            self.conn.write_cache(kv_cache, block_offsets, page_size)
+            if layer_idx == 0:
+                global count
+                count += len(prompt_seq_lengths)
+                last_hash = prompt_token_page_hashes[-1]
+                for key, _ in block_offsets:
+                    print(f"Qian write kv cache {count} ------ {key}  {last_hash}")
+                # k_cache_key, v_cache_key = self.get_kv_cache_key(
+                #     prompt_token_page_hashes[-1], layer_idx)
+                # if self.conn.check_exist(k_cache_key) and self.conn.check_exist(v_cache_key):
+                #     print(f"Qian request {count} ------ kv cache exists {k_cache_key}  {v_cache_key}")
+                # else:
+                #     print(f"Qian request {count} ------ kv cache does not exist {k_cache_key}  {v_cache_key}")
 
         except Exception as e:
             logger.error("Failed to write kv_cache: %s", e)
@@ -168,22 +188,39 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         
         k_cache_key, v_cache_key = self.get_kv_cache_key(
             prompt_token_page_hashes[-1], layer_idx)
+        
+        
         start = time.time()
         while not self.conn.check_exist(k_cache_key) or not self.conn.check_exist(v_cache_key):
             time.sleep(interval)
 
-        print("Time to wait for kv cache available: ", time.time() - start)
+        # print("---------Time to wait for kv cache available: ", time.time() - start)
+        
+        if layer_idx == 0:
+            global count
+            count += len(prompt_seq_lengths)
+            print(f"Qian request {count} ------ kv cache {k_cache_key}  available")
 
         block_offsets, page_size = self._compute_kv_cache_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
             layer_idx, kv_cache)
+        
+        RETRY_LIMIT = 10
 
-        try:
-            self.conn.read_cache(kv_cache, block_offsets, page_size)
-
-        except Exception as e:
-            logger.error("Failed to read kv_cache: %s", e)
-            raise
+        for attempt in range(RETRY_LIMIT):
+            try:
+                # print(f"~~~~~~~~~~ try read cache attempt {attempt}")
+                self.conn.read_cache(kv_cache, block_offsets, page_size)
+                break  # Exit the loop if successful
+            except Exception as e:
+                logger.error("Attempt %d: Failed to read kv_cache: %s", attempt + 1, e)
+                if attempt == 0:
+                    for k, v in block_offsets:
+                        print(f"Qian failed to read kv_cache, block_offsets: {k}, last hash: {prompt_token_page_hashes[-1]}")   
+                
+                if attempt > RETRY_LIMIT - 1:
+                    logger.error("All retry attempts failed.")
+                    raise
 
         logger.debug("Loaded kv_cache for layer %s", layer_idx)
 
@@ -193,17 +230,15 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         if self.conn.rdma_connected:
             self.conn.register_mr(hidden_states)
-        print("1------- register mr done")
         block_offsets = self._compute_hidden_states_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, hidden_states)
-        print("2------- compute offsets")
 
         try:
-            print("2.5 -----------", block_offsets.keys())
             for cache_size, offsets in block_offsets.items():
-                print(f"3------- write cache {cache_size}")
-                self.conn.write_cache(hidden_states, offsets, cache_size)
-                print(f"4------- write cache {cache_size}")
+                if self.conn.rdma_connected:
+                    self.conn.rdma_write_cache(hidden_states, offsets, cache_size)
+                else:
+                    self.conn.local_gpu_write_cache(hidden_states, offsets, cache_size)
         except Exception as e:
             logger.error("Failed to read hidden_states: %s", e)
             raise
@@ -219,21 +254,16 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         while not self.conn.check_exist(hs_cache_key):
             time.sleep(interval)
 
-        print("Time to wait for hs cache available: ", time.time() - start)
+        print("---------Time to wait for hs cache available: ", time.time() - start)
 
         if self.conn.rdma_connected:
             self.conn.register_mr(hidden_states)
-        print("1------- register mr done")
         block_offsets = self._compute_hidden_states_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, hidden_states)
-        print("2------- compute offsets")
 
         try:
-            print("2.5 -----------", block_offsets.keys())
             for cache_size, offsets in block_offsets.items():
-                print(f"3------- read cache {cache_size}")
                 self.conn.read_cache(hidden_states, offsets, cache_size)
-                print(f"4------- read cache {cache_size}")
         except Exception as e:
             logger.error("Failed to read hidden_states: %s", e)
             raise

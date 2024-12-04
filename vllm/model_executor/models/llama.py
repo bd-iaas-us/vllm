@@ -60,6 +60,7 @@ from .utils import (AutoWeightsLoader, PPMissingLayer, is_pp_missing_parameter,
                     make_empty_intermediate_tensors_factory, make_layers,
                     maybe_prefix)
 
+count = 0
 
 class LlamaMLP(nn.Module):
 
@@ -334,6 +335,13 @@ class LlamaModel(nn.Module):
             prepare_kv_cache_transport(input_ids, attn_metadata,
                                        self.cache_config, kwargs))
         
+        # global count
+        # count += len(attn_metadata.seq_lens)
+        # print(f"Qian ---- {count} llama started, {input_ids.shape} tokens")
+        
+        # if len(input_token_hashes) > 0:
+        #     print(f"Qian ---- {count} llama last hash", input_token_hashes[-1])
+        
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -345,12 +353,12 @@ class LlamaModel(nn.Module):
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
-        if fp_type == ForwardPassType.PREFILL:
-            # hidden_states is the last piece info to save
-            # we assume kv_cache are saved properly
-            hidden_state_key = kv_cache_transporter.get_hidden_states_cache_key(input_token_hashes[-1])
-            if kv_cache_transporter.key_exists(hidden_state_key):
-                return hidden_states
+        # if fp_type == ForwardPassType.PREFILL:
+        #     # hidden_states is the last piece info to save
+        #     # we assume kv_cache are saved properly
+        #     hidden_state_key = kv_cache_transporter.get_hidden_states_cache_key(input_token_hashes[-1])
+        #     if kv_cache_transporter.key_exists(hidden_state_key):
+        #         return hidden_states
 
         if fp_type == ForwardPassType.FIRST_DECODE:
             for i in range(self.start_layer, self.end_layer):
@@ -363,18 +371,26 @@ class LlamaModel(nn.Module):
                                             hidden_states)
             kv_cache_transporter.synchronize()
             return hidden_states
-        else:
-            for i in range(self.start_layer, self.end_layer):
-                layer = self.layers[i]
-                hidden_states, residual = layer(
-                    positions, hidden_states, kv_caches[i - self.start_layer],
-                    attn_metadata, residual)
 
-                if fp_type == ForwardPassType.PREFILL:
-                    kv_cache_transporter.save_kv_cache(
-                        input_token_hashes, attn_metadata.seq_lens,
-                        attn_metadata.slot_mapping, i,
-                        kv_caches[i])
+        for i in range(self.start_layer, self.end_layer):
+            if i > 0 and fp_type == ForwardPassType.PREFILL:
+                kv_cache_transporter.synchronize()
+
+            layer = self.layers[i]
+            hidden_states, residual = layer(
+                positions, hidden_states, kv_caches[i - self.start_layer],
+                attn_metadata, residual)
+
+            if fp_type == ForwardPassType.PREFILL:
+                # if i == self.start_layer:
+                #     print(f"Qian ---- {count} llama to save kv_cache last hash", input_token_hashes[-1])
+                kv_cache_transporter.save_kv_cache(
+                    input_token_hashes, attn_metadata.seq_lens,
+                    attn_metadata.slot_mapping, i,
+                    kv_caches[i])
+                
+        if fp_type == ForwardPassType.PREFILL:
+            kv_cache_transporter.synchronize()
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
@@ -595,9 +611,15 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         inputs_embeds: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        import time
+        start = time.time()
+        global count
+        count += len(attn_metadata.seq_lens)
         model_output = self.model(input_ids, positions, kv_caches,
                                   attn_metadata, intermediate_tensors,
                                   inputs_embeds, **kwargs)
+        
+        print(f"Qian ---- {count} llama finished, {time.time() - start} seconds")
 
         return model_output
 
