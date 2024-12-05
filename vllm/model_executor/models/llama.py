@@ -325,6 +325,8 @@ class LlamaModel(nn.Module):
         intermediate_tensors: Optional[IntermediateTensors],
         inputs_embeds: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        import time
+        start = time.time()
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -349,6 +351,9 @@ class LlamaModel(nn.Module):
             })
 
         hidden_states, _ = self.norm(hidden_states, residual)
+        if (attn_metadata.prefill_metadata is not None
+            and attn_metadata.decode_metadata is None):
+            print(f"Qian ---- collect prefill time consumption, {time.time() - start} seconds")
         return hidden_states
 
     def load_weights(self, weights: Iterable[Tuple[str,
