@@ -204,8 +204,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 global count
                 count += len(prompt_seq_lengths)
                 last_hash = prompt_token_page_hashes[-1]
-                for key, _ in block_offsets:
-                    print(f"Qian write kv cache {count} ------ {key}  {last_hash}")
+                # for key, _ in block_offsets:
+                #     print(f"Qian write kv cache {count} ------ {key}  {last_hash}")
                 # k_cache_key, v_cache_key = self.get_kv_cache_key(
                 #     prompt_token_page_hashes[-1], layer_idx)
                 # if self.conn.check_exist(k_cache_key) and self.conn.check_exist(v_cache_key):
@@ -239,9 +239,9 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 break  # Exit the loop if successful
             except Exception as e:
                 logger.error("Attempt %d: Failed to read kv_cache: %s", attempt + 1, e)
-                if attempt == 0:
-                    for k, v in block_offsets:
-                        print(f"Qian failed to read kv_cache, block_offsets: {k}, last hash: {prompt_token_page_hashes[-1]}")   
+                # if attempt == 0:
+                #     for k, v in block_offsets:
+                #         print(f"Qian failed to read kv_cache, block_offsets: {k}, last hash: {prompt_token_page_hashes[-1]}")   
                 
                 if attempt > RETRY_LIMIT - 1:
                     logger.error("All retry attempts failed.")

@@ -45,18 +45,18 @@ def prepare_kv_cache_transport(input_ids, attn_metadata, cache_config, kwargs):
         input_token_hashes = compute_token_page_hashes(input_ids,
                                                        attn_metadata.seq_lens)
         
-        print("Qian_____________________________________________")
-        covered_pages = 0
-        start = 0
-        for seqlen in attn_metadata.seq_lens:
-            if seqlen == 1456:
-                print("Qian ----- hit the 1456 seq_len")
-            print("Qian check hash-----seq_len: ", seqlen)
-            print("Qian check hash-----input_ids: ", input_ids[start:start + seqlen])
-            start += seqlen
-            page_len = math.ceil(seqlen / PAGE_SIZE)
-            print("Qian check hash-----input_token_hashes: ", input_token_hashes[covered_pages: covered_pages + page_len])
-            covered_pages += page_len
+        # print("Qian_____________________________________________")
+        # covered_pages = 0
+        # start = 0
+        # for seqlen in attn_metadata.seq_lens:
+        #     if seqlen == 1456:
+        #         print("Qian ----- hit the 1456 seq_len")
+        #     print("Qian check hash-----seq_len: ", seqlen)
+        #     print("Qian check hash-----input_ids: ", input_ids[start:start + seqlen])
+        #     start += seqlen
+        #     page_len = math.ceil(seqlen / PAGE_SIZE)
+        #     print("Qian check hash-----input_token_hashes: ", input_token_hashes[covered_pages: covered_pages + page_len])
+        #     covered_pages += page_len
 
     return fp_type, cache_config.kv_cache_transporter, input_token_hashes
 

@@ -372,6 +372,8 @@ class LlamaModel(nn.Module):
                                             attn_metadata.seq_lens,
                                             hidden_states)
             kv_cache_transporter.synchronize()
+
+            print(f"Qian ---- collect first decode time consumption, {time.time() - start} seconds")
             
             return hidden_states
 
