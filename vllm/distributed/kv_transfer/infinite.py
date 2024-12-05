@@ -11,11 +11,13 @@ from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
 from vllm.distributed import (get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
 
+
 logger = logging.getLogger(__name__)
 
 Default_Infinite_Server = "127.0.0.1"
 interval = 0.01
 count = 0
+shared_signal_folder = "/tmp/infinistore"
 
 class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     #Class-level singleton connection instance
@@ -27,7 +29,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         if tokens_per_page <= 0:
             raise ValueError("tokens_per_page must be greater than 0.")
 
-        self.model = model
+        # escape the slash in the model name
+        self.model = model.replace("/", "_")
         self.tokens_per_page = tokens_per_page
 
         #TODO: when server is local, use connection_type=infinistore.TYPE_LOCAL_GPU,
@@ -59,12 +62,15 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         self.tp_size = get_tensor_model_parallel_world_size()
         self.tp_rank = get_tensor_model_parallel_rank()
 
+        os.makedirs(shared_signal_folder, exist_ok=True)
+
     def get_hidden_states_cache_key(self, page_hash: str) -> str:
-        return f"{self.model}_{page_hash}_tp{self.tp_rank}/{self.tp_size}_hs"
+        return f"{self.model}_{page_hash}_tp_{self.tp_rank}_{self.tp_size}_hs"
     
     def get_kv_cache_key(self, page_hash: str, layer_idx: int) -> Tuple[str, str]:
-        k_cache_key = f"{self.model}_{page_hash}_layer_{layer_idx}_tp{self.tp_rank}/{self.tp_size}_k"
-        v_cache_key = f"{self.model}_{page_hash}_layer_{layer_idx}_tp{self.tp_rank}/{self.tp_size}_v"
+        initial = f"{self.model}_{page_hash}_layer_{layer_idx}_tp_{self.tp_rank}_{self.tp_size}"
+        k_cache_key = f"{initial}_k"
+        v_cache_key = f"{initial}_v"
         return k_cache_key, v_cache_key
 
     def _compute_kv_cache_block_offsets(
@@ -143,6 +149,38 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             page_start_index += num_pages
 
         return block_offsets
+    
+    def _publish_write_completion(self, key: str) -> None:
+        open(os.path.join(shared_signal_folder, key), mode="w").close()
+
+    def publish_kv_cache_prefill_done(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) -> None:
+
+        covered_pages = 0
+        for seq_len in seq_lens:
+            covered_pages += math.ceil(seq_len / self.tokens_per_page)
+            current_hash = input_token_hashes[covered_pages-1]
+            _, v_cache_key = self.get_kv_cache_key(
+                    current_hash, layer_idx)
+            
+            # only need to publish V cache key, as V cache is always written after K cache
+            self._publish_write_completion(v_cache_key)
+
+    def verify_kv_cache_prefill_done(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) :
+        covered_pages = 0
+        for seq_len in seq_lens:
+            covered_pages += math.ceil(seq_len / self.tokens_per_page)
+            current_hash = input_token_hashes[covered_pages-1]
+            _, v_cache_key = self.get_kv_cache_key(
+                    current_hash, layer_idx)
+            if os.path.exists(os.path.join(shared_signal_folder, v_cache_key)):
+                continue
+            
+            wt = 0
+            while not os.path.exists(os.path.join(shared_signal_folder, v_cache_key)):
+                time.sleep(interval)
+                wt += 1
+                if wt % 100 == 0:
+                    print(f"Qian wait for kv cache prefill done {wt} times {v_cache_key}")
 
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
@@ -186,20 +224,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                       slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
         
-        k_cache_key, v_cache_key = self.get_kv_cache_key(
-            prompt_token_page_hashes[-1], layer_idx)
-        
-        
-        start = time.time()
-        while not self.conn.check_exist(k_cache_key) or not self.conn.check_exist(v_cache_key):
-            time.sleep(interval)
-
-        # print("---------Time to wait for kv cache available: ", time.time() - start)
-        
-        if layer_idx == 0:
-            global count
-            count += len(prompt_seq_lengths)
-            print(f"Qian request {count} ------ kv cache {k_cache_key}  available")
+        self.verify_kv_cache_prefill_done(prompt_token_page_hashes, prompt_seq_lengths, layer_idx)
 
         block_offsets, page_size = self._compute_kv_cache_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,

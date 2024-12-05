@@ -150,7 +150,6 @@ def sample_booksum_requests(
 
     filtered_dataset: List[Tuple[str, int, int]] = []
 
-
     with open(dataset_path, newline='') as csvfile: #, open("/tmp/prompt_15k_to_50k.csv", 'w', newline='') as outfile:
         csvreader = csv.DictReader(csvfile)
         # fieldnames = csvreader.fieldnames
@@ -175,8 +174,11 @@ def sample_booksum_requests(
 
             if prompt_len < fix_prompt_len:
                 continue
+
+            if prompt_len / fix_prompt_len > 1.1:
+                continue
             
-            filtered_dataset.append((prompt[:fix_prompt_len], fix_prompt_len, fixed_output_len, None))
+            filtered_dataset.append((prompt, prompt_len, fixed_output_len, None))
     
     if len(filtered_dataset) < num_requests:
         raise ValueError(

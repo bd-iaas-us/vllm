@@ -331,6 +331,8 @@ class LlamaModel(nn.Module):
         inputs_embeds: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        import time
+        start = time.time()
         fp_type, kv_cache_transporter, input_token_hashes = (
             prepare_kv_cache_transport(input_ids, attn_metadata,
                                        self.cache_config, kwargs))
@@ -370,16 +372,19 @@ class LlamaModel(nn.Module):
                                             attn_metadata.seq_lens,
                                             hidden_states)
             kv_cache_transporter.synchronize()
+            
             return hidden_states
 
         for i in range(self.start_layer, self.end_layer):
-            if i > 0 and fp_type == ForwardPassType.PREFILL:
-                kv_cache_transporter.synchronize()
-
             layer = self.layers[i]
             hidden_states, residual = layer(
                 positions, hidden_states, kv_caches[i - self.start_layer],
                 attn_metadata, residual)
+            
+            # mark the previous layer kv cache transfer as done
+            if i > 0 and fp_type == ForwardPassType.PREFILL:
+                kv_cache_transporter.synchronize()
+                kv_cache_transporter.publish_kv_cache_prefill_done(input_token_hashes, attn_metadata.seq_lens, i - 1)
 
             if fp_type == ForwardPassType.PREFILL:
                 # if i == self.start_layer:
@@ -391,6 +396,7 @@ class LlamaModel(nn.Module):
                 
         if fp_type == ForwardPassType.PREFILL:
             kv_cache_transporter.synchronize()
+            kv_cache_transporter.publish_kv_cache_prefill_done(input_token_hashes, attn_metadata.seq_lens, self.end_layer-1)
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
@@ -403,6 +409,10 @@ class LlamaModel(nn.Module):
         finalize_kv_cache_transport(fp_type, kv_cache_transporter,
                                     input_token_hashes, attn_metadata,
                                     hidden_states)
+        
+        if (attn_metadata.prefill_metadata is not None
+            and attn_metadata.decode_metadata is None):
+            print(f"Qian ---- collect prefill time consumption, {time.time() - start} seconds")
 
         return hidden_states
 
@@ -619,7 +629,7 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
                                   attn_metadata, intermediate_tensors,
                                   inputs_embeds, **kwargs)
         
-        print(f"Qian ---- {count} llama finished, {time.time() - start} seconds")
+        # print(f"Qian ---- {count} llama finished, {time.time() - start} seconds")
 
         return model_output
 
