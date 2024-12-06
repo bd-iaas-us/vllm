@@ -71,7 +71,7 @@ class CacheEngine:
         if os.environ.get("PD_SEPARATE_STAGE", "") != "":
 
             self.cache_config.kv_cache_transporter = InfiniStoreKVCacheTransporter(
-                self.model_config.model)
+                self.model_config.model, self.block_size)
 
     def _allocate_kv_cache(
         self,

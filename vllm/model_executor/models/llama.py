@@ -364,16 +364,18 @@ class LlamaModel(nn.Module):
 
         if fp_type == ForwardPassType.FIRST_DECODE:
             for i in range(self.start_layer, self.end_layer):
+                start1 = time.time()
                 kv_cache_transporter.read_kv_cache(input_token_hashes,
                                                     attn_metadata.seq_lens,
                                                     attn_metadata.slot_mapping,
-                                                    i, kv_caches[i])               
+                                                    i, kv_caches[i])    
+                print(f"Qian ---- read kv cache layer {i}, {time.time() - start1} seconds")           
             kv_cache_transporter.read_hidden_states(input_token_hashes,
                                             attn_metadata.seq_lens,
                                             hidden_states)
+            start2 = time.time()
             kv_cache_transporter.synchronize()
-
-            print(f"Qian ---- collect first decode time consumption, {time.time() - start} seconds")
+            print(f"Qian ---- read synchronize kv cache, {time.time() - start2} seconds")
             
             return hidden_states
 
@@ -385,20 +387,26 @@ class LlamaModel(nn.Module):
             
             # mark the previous layer kv cache transfer as done
             if i > 0 and fp_type == ForwardPassType.PREFILL:
+                start3 = time.time()
                 kv_cache_transporter.synchronize()
-                kv_cache_transporter.publish_kv_cache_prefill_done(input_token_hashes, attn_metadata.seq_lens, i - 1)
+                kv_cache_transporter.publish_kv_cache_prefill_ready(input_token_hashes, attn_metadata.seq_lens, i - 1)
+                print(f"Qian ---- save synchronize kv cache layer {i-1}, {time.time() - start3} seconds")
 
             if fp_type == ForwardPassType.PREFILL:
                 # if i == self.start_layer:
                 #     print(f"Qian ---- {count} llama to save kv_cache last hash", input_token_hashes[-1])
+                start4 = time.time()
                 kv_cache_transporter.save_kv_cache(
                     input_token_hashes, attn_metadata.seq_lens,
                     attn_metadata.slot_mapping, i,
                     kv_caches[i])
+                print(f"Qian ----  save kv cache layer {i}, {time.time() - start4} seconds")
                 
         if fp_type == ForwardPassType.PREFILL:
+            start5 = time.time()
             kv_cache_transporter.synchronize()
-            kv_cache_transporter.publish_kv_cache_prefill_done(input_token_hashes, attn_metadata.seq_lens, self.end_layer-1)
+            kv_cache_transporter.publish_kv_cache_prefill_ready(input_token_hashes, attn_metadata.seq_lens, self.end_layer-1)
+            print(f"Qian ---- save synchronize kv cache layer {self.end_layer-1}, {time.time() - start5} seconds")
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({

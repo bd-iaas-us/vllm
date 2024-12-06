@@ -70,6 +70,7 @@ def finalize_kv_cache_transport(fp_type, kv_cache_transporter,
                                                 hidden_states)
 
         kv_cache_transporter.synchronize()
+        kv_cache_transporter.publish_hidden_states_ready(input_token_hashes, attn_metadata.seq_lens)
 
     return
 

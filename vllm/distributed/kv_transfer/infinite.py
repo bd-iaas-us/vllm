@@ -69,6 +69,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     
     def get_kv_cache_key(self, page_hash: str, layer_idx: int) -> Tuple[str, str]:
         initial = f"{self.model}_{page_hash}_layer_{layer_idx}_tp_{self.tp_rank}_{self.tp_size}"
+        # initial = f"{page_hash}_{layer_idx}_{self.tp_rank}_{self.tp_size}"
         k_cache_key = f"{initial}_k"
         v_cache_key = f"{initial}_v"
         return k_cache_key, v_cache_key
@@ -151,9 +152,11 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         return block_offsets
     
     def _publish_write_completion(self, key: str) -> None:
+        import time
+        start = time.time()
         open(os.path.join(shared_signal_folder, key), mode="w").close()
 
-    def publish_kv_cache_prefill_done(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) -> None:
+    def publish_kv_cache_prefill_ready(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) -> None:
 
         covered_pages = 0
         for seq_len in seq_lens:
@@ -165,7 +168,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             # only need to publish V cache key, as V cache is always written after K cache
             self._publish_write_completion(v_cache_key)
 
-    def verify_kv_cache_prefill_done(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) :
+    def verify_kv_cache_prefill_ready(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) :
         covered_pages = 0
         for seq_len in seq_lens:
             covered_pages += math.ceil(seq_len / self.tokens_per_page)
@@ -182,13 +185,36 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 if wt % 100 == 0:
                     print(f"Qian wait for kv cache prefill done {wt} times {v_cache_key}")
 
+    def publish_hidden_states_ready(self, input_token_hashes: List[str], seq_lens: List[int]) -> None:
+
+        covered_pages = 0
+        for seq_len in seq_lens:
+            covered_pages += math.ceil(seq_len / self.tokens_per_page)
+            current_hash = input_token_hashes[covered_pages-1]
+            hs_cache_key = self.get_hidden_states_cache_key(current_hash)
+            
+            self._publish_write_completion(hs_cache_key)
+
+    def verify_hidden_states_ready(self, input_token_hashes: List[str], seq_lens: List[int]) :
+        covered_pages = 0
+        for seq_len in seq_lens:
+            covered_pages += math.ceil(seq_len / self.tokens_per_page)
+            current_hash = input_token_hashes[covered_pages-1]
+            hs_cache_key = self.get_hidden_states_cache_key(current_hash)
+            if os.path.exists(os.path.join(shared_signal_folder, hs_cache_key)):
+                continue
+            
+            wt = 0
+            while not os.path.exists(os.path.join(shared_signal_folder, hs_cache_key)):
+                time.sleep(interval)
+                wt += 1
+                if wt % 100 == 0:
+                    print(f"Qian wait for hidden states ready {wt} times {hs_cache_key}")
+
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
                       slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
-
-        # if layer_idx == 0:
-        #     print("Qian------ last hash: ", prompt_token_page_hashes[-1])
 
         block_offsets, page_size = self._compute_kv_cache_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
@@ -204,14 +230,6 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 global count
                 count += len(prompt_seq_lengths)
                 last_hash = prompt_token_page_hashes[-1]
-                # for key, _ in block_offsets:
-                #     print(f"Qian write kv cache {count} ------ {key}  {last_hash}")
-                # k_cache_key, v_cache_key = self.get_kv_cache_key(
-                #     prompt_token_page_hashes[-1], layer_idx)
-                # if self.conn.check_exist(k_cache_key) and self.conn.check_exist(v_cache_key):
-                #     print(f"Qian request {count} ------ kv cache exists {k_cache_key}  {v_cache_key}")
-                # else:
-                #     print(f"Qian request {count} ------ kv cache does not exist {k_cache_key}  {v_cache_key}")
 
         except Exception as e:
             logger.error("Failed to write kv_cache: %s", e)
@@ -224,7 +242,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                       slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
         
-        self.verify_kv_cache_prefill_done(prompt_token_page_hashes, prompt_seq_lengths, layer_idx)
+        self.verify_kv_cache_prefill_ready(prompt_token_page_hashes, prompt_seq_lengths, layer_idx)
 
         block_offsets, page_size = self._compute_kv_cache_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
@@ -234,14 +252,10 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         for attempt in range(RETRY_LIMIT):
             try:
-                # print(f"~~~~~~~~~~ try read cache attempt {attempt}")
                 self.conn.read_cache(kv_cache, block_offsets, page_size)
                 break  # Exit the loop if successful
             except Exception as e:
                 logger.error("Attempt %d: Failed to read kv_cache: %s", attempt + 1, e)
-                # if attempt == 0:
-                #     for k, v in block_offsets:
-                #         print(f"Qian failed to read kv_cache, block_offsets: {k}, last hash: {prompt_token_page_hashes[-1]}")   
                 
                 if attempt > RETRY_LIMIT - 1:
                     logger.error("All retry attempts failed.")
@@ -274,12 +288,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                            prompt_seq_lengths: List[int],
                            hidden_states: torch.Tensor) -> None:
 
-        hs_cache_key = self.get_hidden_states_cache_key(prompt_token_page_hashes[-1])
-        start = time.time()
-        while not self.conn.check_exist(hs_cache_key):
-            time.sleep(interval)
-
-        print("---------Time to wait for hs cache available: ", time.time() - start)
+        self.verify_hidden_states_ready(prompt_token_page_hashes, prompt_seq_lengths)
 
         if self.conn.rdma_connected:
             self.conn.register_mr(hidden_states)
