@@ -338,17 +338,21 @@ class LlamaModel(nn.Module):
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
+        start1 = time.time()
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(positions, hidden_states,
                                             kv_caches[i - self.start_layer],
                                             attn_metadata, residual)
+            
+        print (f"Qian ---- layer compute , {time.time() - start1} seconds")
+
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
                 "hidden_states": hidden_states,
                 "residual": residual
-            })
+            }
 
         hidden_states, _ = self.norm(hidden_states, residual)
         if (attn_metadata.prefill_metadata is not None
