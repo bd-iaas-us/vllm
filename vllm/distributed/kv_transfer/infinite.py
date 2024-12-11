@@ -211,7 +211,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 if wt % 100 == 0:
                     print(f"Qian wait for hidden states ready {wt} times {hs_cache_key}")
 
-    def save_kv_cache(self, prompt_token_page_hashes: List[str],
+    def _save_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
                       slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
@@ -236,6 +236,15 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             raise
 
         logger.debug("Saved kv_cache for layer %s", layer_idx)
+    
+    def save_kv_cache(self, prompt_token_page_hashes: List[str],
+                      prompt_seq_lengths: List[int],
+                      slot_mapping: torch.Tensor, layer_idx: int,
+                      kv_cache: torch.Tensor) -> None:
+
+        self._save_kv_cache(prompt_token_page_hashes, prompt_seq_lengths, slot_mapping, layer_idx, kv_cache)
+        self.synchronize()
+        self.publish_kv_cache_prefill_ready(prompt_token_page_hashes, prompt_seq_lengths, layer_idx)
 
     def read_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
@@ -263,7 +272,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         logger.debug("Loaded kv_cache for layer %s", layer_idx)
 
-    def save_hidden_states(self, prompt_token_page_hashes: List[str],
+    def _save_hidden_states(self, prompt_token_page_hashes: List[str],
                            prompt_seq_lengths: List[int],
                            hidden_states: torch.Tensor) -> None:
 
@@ -283,6 +292,14 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             raise
 
         logger.debug("Saved hidden_states")
+
+    def save_hidden_states(self, prompt_token_page_hashes: List[str],
+                            prompt_seq_lengths: List[int],
+                            hidden_states: torch.Tensor) -> None:
+    
+          self._save_hidden_states(prompt_token_page_hashes, prompt_seq_lengths, hidden_states)
+          self.synchronize()
+          self.publish_hidden_states_ready(prompt_token_page_hashes, prompt_seq_lengths)
 
     def read_hidden_states(self, prompt_token_page_hashes: List[str],
                            prompt_seq_lengths: List[int],

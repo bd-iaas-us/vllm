@@ -21,6 +21,7 @@
 # limitations under the License.
 """Inference-only LLaMA model compatible with HuggingFace weights."""
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
+from concurrent.futures import ThreadPoolExecutor
 
 import torch
 from torch import nn
@@ -337,13 +338,6 @@ class LlamaModel(nn.Module):
             prepare_kv_cache_transport(input_ids, attn_metadata,
                                        self.cache_config, kwargs))
         
-        # global count
-        # count += len(attn_metadata.seq_lens)
-        # print(f"Qian ---- {count} llama started, {input_ids.shape} tokens")
-        
-        # if len(input_token_hashes) > 0:
-        #     print(f"Qian ---- {count} llama last hash", input_token_hashes[-1])
-        
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -368,8 +362,7 @@ class LlamaModel(nn.Module):
                 kv_cache_transporter.read_kv_cache(input_token_hashes,
                                                     attn_metadata.seq_lens,
                                                     attn_metadata.slot_mapping,
-                                                    i, kv_caches[i])    
-                print(f"Qian ---- read kv cache layer {i}, {time.time() - start1} seconds")           
+                                                    i, kv_caches[i])          
             kv_cache_transporter.read_hidden_states(input_token_hashes,
                                             attn_metadata.seq_lens,
                                             hidden_states)
@@ -379,47 +372,51 @@ class LlamaModel(nn.Module):
             
             return hidden_states
 
+        # work number is for future tuning
+        transferExecutor = ThreadPoolExecutor(max_workers=4)
+
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(
                 positions, hidden_states, kv_caches[i - self.start_layer],
                 attn_metadata, residual)
-            
-            # mark the previous layer kv cache transfer as done
-            if i > 0 and fp_type == ForwardPassType.PREFILL:
-                start3 = time.time()
-                kv_cache_transporter.synchronize()
-                kv_cache_transporter.publish_kv_cache_prefill_ready(input_token_hashes, attn_metadata.seq_lens, i - 1)
-                print(f"Qian ---- save synchronize kv cache layer {i-1}, {time.time() - start3} seconds")
-
+        
             if fp_type == ForwardPassType.PREFILL:
-                # if i == self.start_layer:
-                #     print(f"Qian ---- {count} llama to save kv_cache last hash", input_token_hashes[-1])
-                start4 = time.time()
-                kv_cache_transporter.save_kv_cache(
-                    input_token_hashes, attn_metadata.seq_lens,
-                    attn_metadata.slot_mapping, i,
-                    kv_caches[i])
-                print(f"Qian ----  save kv cache layer {i}, {time.time() - start4} seconds")
-                
-        if fp_type == ForwardPassType.PREFILL:
-            start5 = time.time()
-            kv_cache_transporter.synchronize()
-            kv_cache_transporter.publish_kv_cache_prefill_ready(input_token_hashes, attn_metadata.seq_lens, self.end_layer-1)
-            print(f"Qian ---- save synchronize kv cache layer {self.end_layer-1}, {time.time() - start5} seconds")
+                kv_event = torch.cuda.Event(enable_timing=True)
+                kv_event.record()
 
+                def wait_and_save(event, i):
+                    event.synchronize()  # Blocks CPU until GPU signals this event
+                    t2 = time.time()
+                    # Now save the kv cache
+                    kv_cache_transporter.save_kv_cache(
+                        input_token_hashes, attn_metadata.seq_lens,
+                        attn_metadata.slot_mapping, i,
+                        kv_caches[i]
+                    )
+
+                transferExecutor.submit(wait_and_save, kv_event, i)
+                
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
                 "hidden_states": hidden_states,
                 "residual": residual
             })
-
-        hidden_states, _ = self.norm(hidden_states, residual)
-
-        finalize_kv_cache_transport(fp_type, kv_cache_transporter,
-                                    input_token_hashes, attn_metadata,
-                                    hidden_states)
         
+        hidden_states, _ = self.norm(hidden_states, residual)
+        if fp_type == ForwardPassType.PREFILL:
+            hs_event = torch.cuda.Event(enable_timing=True)
+            hs_event.record()
+
+            def wait_and_save_hs(event):
+                event.synchronize()
+                kv_cache_transporter.save_hidden_states(input_token_hashes,
+                                                        attn_metadata.seq_lens,
+                                                        hidden_states)
+            transferExecutor.submit(wait_and_save_hs, hs_event)
+
+        torch.cuda.synchronize()
+
         if (attn_metadata.prefill_metadata is not None
             and attn_metadata.decode_metadata is None):
             print(f"Qian ---- collect prefill time consumption, {time.time() - start} seconds")
