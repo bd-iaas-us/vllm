@@ -8,8 +8,8 @@ class KVCacheTransporterBase(ABC):
     @abstractmethod
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
-                      slot_mapping: torch.Tensor, layer_idx: int,
-                      kv_cache: torch.Tensor) -> None:
+                      block_ids: List[int], layer_idx: int,
+                      kv_cache: torch.Tensor)  -> None:
 
         raise NotImplementedError
 

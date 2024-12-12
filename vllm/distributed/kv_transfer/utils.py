@@ -41,11 +41,35 @@ def prepare_kv_cache_transport(input_ids, attn_metadata, cache_config, kwargs):
     fp_type = get_forward_pass_type(input_ids, attn_metadata)
 
     input_token_hashes = []
+    block_ids = []
     if fp_type in (ForwardPassType.PREFILL, ForwardPassType.FIRST_DECODE):
         input_token_hashes = compute_token_page_hashes(input_ids,
                                                        attn_metadata.seq_lens)
+        
+    block_ids = []
+    if fp_type == ForwardPassType.PREFILL:
+        seq_start_index = 0
+        page_start_index = 0
+        kv_cache_transporter = cache_config.kv_cache_transporter
+        tokens_per_page = kv_cache_transporter.tokens_per_page
+        for seq_length in attn_metadata.seq_lens:
+            num_pages = math.ceil(seq_length / tokens_per_page)
 
-    return fp_type, cache_config.kv_cache_transporter, input_token_hashes
+            for page_num in range(num_pages):
+                start_token_idx = page_num * kv_cache_transporter.tokens_per_page
+                page_idx = page_num + page_start_index
+
+                slot_mapping_value = attn_metadata.slot_mapping[seq_start_index +
+                                                      start_token_idx].item()
+                
+                block_ids.append(slot_mapping_value //tokens_per_page)
+
+            seq_start_index += seq_length
+            page_start_index += num_pages
+        
+        assert len(block_ids) == len(input_token_hashes)
+        
+    return fp_type, cache_config.kv_cache_transporter, input_token_hashes, block_ids
 
 
 def finalize_kv_cache_transport(fp_type, kv_cache_transporter,

@@ -83,57 +83,17 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         return k_cache_key, v_cache_key
 
     def _compute_kv_cache_block_offsets(
-            self, prompt_token_page_hashes: List[str], seq_lens: List[int],
-            slot_mapping: torch.Tensor, layer_idx: int,
-            kv_cache: torch.Tensor) -> List[Tuple[str, int]]:
+            self, prompt_token_page_hashes: List[str], block_ids: List[int],
+            layer_idx: int) -> List[Tuple[str, int]]:
         
-        start = time.time()
-
-        last_hash = prompt_token_page_hashes[-1]
-
-        print(f"Qian bbbbbb infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
-
         block_offsets: List[Tuple[str, int]] = []
 
-        seq_start_index = 0
-        page_start_index = 0
-        for seq_length in seq_lens:
-            print(f"Qian ccccccc infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
-            num_pages = math.ceil(seq_length / self.tokens_per_page)
-
-            for page_num in range(num_pages):
-                print(f"Qian dddddd infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
-                start_token_idx = page_num * self.tokens_per_page
-                page_idx = page_num + page_start_index
-                current_hash = prompt_token_page_hashes[page_idx]
-
-                # Generate cache keys for the current page
-                k_cache_key, v_cache_key = self.get_kv_cache_key(
-                    current_hash, layer_idx)
-
-                # Calculate offset in the kv_cache
-                try:
-                    t1 = time.time()
-                    slot_mapping_value = slot_mapping[seq_start_index +
-                                                      start_token_idx].item()
-                    print(f"Qian gggggg ================= slot mapping cost {time.time()-t1} secs")
-                    page_offset = (slot_mapping_value //
-                                   self.tokens_per_page) * self.page_size
-                except IndexError as e:
-                    logger.error("Invalid slot mapping index %s: %s", page_idx,
-                                 e)
-                    raise
-
-                block_offsets.append((k_cache_key, page_offset))
-                block_offsets.append(
-                    (v_cache_key, page_offset + self.k_or_v_total_size))
-
-            print(f"Qian eeeeeee infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
-
-            seq_start_index += seq_length
-            page_start_index += num_pages
-
-        print(f"Qian fffffff infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
+        for idx in range(len(block_ids)):
+            current_hash = prompt_token_page_hashes[idx]
+            k_cache_key, v_cache_key = self.get_kv_cache_key(
+                current_hash, layer_idx)
+            block_offsets.append((k_cache_key, block_ids[idx] * self.page_size))
+            block_offsets.append((v_cache_key, block_ids[idx] * self.page_size + self.k_or_v_total_size))
 
         return block_offsets
 
@@ -242,8 +202,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                     print(f"Qian wait for hidden states ready {wt} times {hs_cache_key}")
 
     def _save_kv_cache(self, prompt_token_page_hashes: List[str],
-                      prompt_seq_lengths: List[int],
-                      slot_mapping: torch.Tensor, layer_idx: int,
+                      block_ids: List[int], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
         last_hash = prompt_token_page_hashes[-1]
@@ -251,8 +210,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         # print(f"Qian aaaaaa infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
 
         block_offsets = self._compute_kv_cache_block_offsets(
-            prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
-            layer_idx, kv_cache)
+            prompt_token_page_hashes, block_ids,
+            layer_idx)
     
         
 
@@ -274,15 +233,10 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
-                      slot_mapping: torch.Tensor, layer_idx: int,
+                      block_ids: List[int], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
         
-        last_hash = prompt_token_page_hashes[-1]
-
-        start = time.time()
-
-        print(f"Qian 111111 infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}")
-        self._save_kv_cache(prompt_token_page_hashes, prompt_seq_lengths, slot_mapping, layer_idx, kv_cache)
+        self._save_kv_cache(prompt_token_page_hashes, block_ids, layer_idx, kv_cache)
         print(f"Qian 222222 infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}")
         self.synchronize()
         print(f"Qian 333333 infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}")
@@ -291,14 +245,14 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
     def read_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
-                      slot_mapping: torch.Tensor, layer_idx: int,
+                      block_ids: List[int], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
         
         self.verify_kv_cache_prefill_ready(prompt_token_page_hashes, prompt_seq_lengths, layer_idx)
 
         block_offsets = self._compute_kv_cache_block_offsets(
-            prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
-            layer_idx, kv_cache)
+            prompt_token_page_hashes, block_ids,
+            layer_idx)
         
         RETRY_LIMIT = 10
 
