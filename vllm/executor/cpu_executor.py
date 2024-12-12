@@ -284,6 +284,9 @@ class CPUExecutor(ExecutorBase):
     def stop_profile(self) -> None:
         self.driver_method_invoker(self.driver_worker, "stop_profile")
 
+    def download_kv_cache(self, prompt_token_ids: List[int], block_ids: List[int]) -> None:
+        raise NotImplementedError
+
 
 class CPUExecutorAsync(CPUExecutor, ExecutorAsyncBase):
 

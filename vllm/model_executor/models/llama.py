@@ -356,19 +356,20 @@ class LlamaModel(nn.Module):
         #     if kv_cache_transporter.key_exists(hidden_state_key):
         #         return hidden_states
 
-        if fp_type == ForwardPassType.FIRST_DECODE:
-            for i in range(self.start_layer, self.end_layer):
-                start1 = time.time()
-                kv_cache_transporter.read_kv_cache(input_token_hashes,
-                                                    attn_metadata.seq_lens,
-                                                    attn_metadata.slot_mapping,
-                                                    i, kv_caches[i])          
+        if fp_type == ForwardPassType.FIRST_DECODE:        
             kv_cache_transporter.read_hidden_states(input_token_hashes,
                                             attn_metadata.seq_lens,
                                             hidden_states)
             start2 = time.time()
             kv_cache_transporter.synchronize()
-            print(f"Qian ---- read synchronize kv cache, {time.time() - start2} seconds")
+            import datetime
+            current_time = time.time()
+            dt = datetime.datetime.fromtimestamp(current_time)
+            formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+            last_hash = input_token_hashes[-1] if len(input_token_hashes) > 0 else "None"
+
+            print(f"Qian ---- first decoding, {current_time - start2} sec, last hash {last_hash}, {formatted_time}, {len(attn_metadata.seq_lens)} ")
             
             return hidden_states
 
@@ -417,9 +418,18 @@ class LlamaModel(nn.Module):
 
         torch.cuda.synchronize()
 
+        import datetime
+        current_time = time.time()
+        dt = datetime.datetime.fromtimestamp(current_time)
+        formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+        last_hash = input_token_hashes[-1] if len(input_token_hashes) > 0 else "None"
+
         if (attn_metadata.prefill_metadata is not None
             and attn_metadata.decode_metadata is None):
-            print(f"Qian ---- collect prefill time consumption, {time.time() - start} seconds")
+            print(f"Qian ---- collect prefill time consumption, {current_time - start} seconds, last hash {last_hash}, {formatted_time}, seq {len(attn_metadata.seq_lens)}, rank {get_tensor_model_parallel_rank()} ")
+        else:
+            print(f"Qian ---- decoding, {formatted_time} {len(attn_metadata.seq_lens)} ")
 
         return hidden_states
 

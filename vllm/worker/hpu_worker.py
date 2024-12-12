@@ -312,6 +312,9 @@ class HPUWorker(LocalOrDistributedWorkerBase):
     def shutdown_inc(self):
         self.model_runner.shutdown_inc()
 
+    def download_kv_cache(self, prompt_token_ids: List[int], block_ids: List[int]) -> None:
+        raise NotImplementedError
+
     @property
     def max_model_len(self) -> int:
         return self.model_config.max_model_len

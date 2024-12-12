@@ -433,6 +433,7 @@ class Sequence:
         # Input + output tokens
         self.tokens: Optional[List[str]] = None
 
+
     @property
     def n_blocks(self) -> int:
         return (self.get_len() + self.block_size - 1) // self.block_size

@@ -116,6 +116,8 @@ class OpenVINOExecutor(ExecutorBase):
         # it's running.
         return
 
+    def download_kv_cache(self, prompt_token_ids: List[int], block_ids: List[int]) -> None:
+        raise NotImplementedError
 
 class OpenVINOExecutorAsync(OpenVINOExecutor, ExecutorAsyncBase):
 

@@ -4,12 +4,15 @@ from typing import Dict, List, Tuple
 import torch
 import os
 import time
+import datetime
 
 import infinistore
 
 from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
 from vllm.distributed import (get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
+
+from .utils import compute_token_page_hashes
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +26,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     #Class-level singleton connection instance
     _singleton_conn = None
 
-    def __init__(self, model: str, tokens_per_page=16) -> None:
+    def __init__(self, model: str, kv_cache_list: List[torch.Tensor], tokens_per_page: int =16) -> None:
         if not model:
             raise ValueError("model cannot be empty.")
         if tokens_per_page <= 0:
@@ -31,7 +34,10 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         # escape the slash in the model name
         self.model = model.replace("/", "_")
+        self.kv_cache_list = kv_cache_list
         self.tokens_per_page = tokens_per_page
+        self.page_size = kv_cache_list[0][0][0].numel() 
+        self.k_or_v_total_size = kv_cache_list[0][0].numel()
 
         #TODO: when server is local, use connection_type=infinistore.TYPE_LOCAL_GPU,
         # otherwise RDMA
@@ -62,6 +68,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         self.tp_size = get_tensor_model_parallel_world_size()
         self.tp_rank = get_tensor_model_parallel_rank()
 
+        print("~~~~~~~~~~~~~~~~~ tp rank ", self.tp_rank, " tp size ", self.tp_size)
+
         os.makedirs(shared_signal_folder, exist_ok=True)
 
     def get_hidden_states_cache_key(self, page_hash: str) -> str:
@@ -77,19 +85,24 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     def _compute_kv_cache_block_offsets(
             self, prompt_token_page_hashes: List[str], seq_lens: List[int],
             slot_mapping: torch.Tensor, layer_idx: int,
-            kv_cache: torch.Tensor) -> Tuple[List[Tuple[str, int]], int]:
+            kv_cache: torch.Tensor) -> List[Tuple[str, int]]:
+        
+        start = time.time()
+
+        last_hash = prompt_token_page_hashes[-1]
+
+        print(f"Qian bbbbbb infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
 
         block_offsets: List[Tuple[str, int]] = []
-        page_size = kv_cache[0][0].numel()  # Number of elements in one page
-        k_or_v_cache_size = kv_cache[0].numel(
-        )  # Size of key or value cache per token
 
         seq_start_index = 0
         page_start_index = 0
         for seq_length in seq_lens:
+            print(f"Qian ccccccc infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
             num_pages = math.ceil(seq_length / self.tokens_per_page)
 
             for page_num in range(num_pages):
+                print(f"Qian dddddd infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
                 start_token_idx = page_num * self.tokens_per_page
                 page_idx = page_num + page_start_index
                 current_hash = prompt_token_page_hashes[page_idx]
@@ -100,10 +113,12 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
                 # Calculate offset in the kv_cache
                 try:
+                    t1 = time.time()
                     slot_mapping_value = slot_mapping[seq_start_index +
                                                       start_token_idx].item()
+                    print(f"Qian gggggg ================= slot mapping cost {time.time()-t1} secs")
                     page_offset = (slot_mapping_value //
-                                   self.tokens_per_page) * page_size
+                                   self.tokens_per_page) * self.page_size
                 except IndexError as e:
                     logger.error("Invalid slot mapping index %s: %s", page_idx,
                                  e)
@@ -111,12 +126,16 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
                 block_offsets.append((k_cache_key, page_offset))
                 block_offsets.append(
-                    (v_cache_key, page_offset + k_or_v_cache_size))
+                    (v_cache_key, page_offset + self.k_or_v_total_size))
+
+            print(f"Qian eeeeeee infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
 
             seq_start_index += seq_length
             page_start_index += num_pages
 
-        return block_offsets, page_size
+        print(f"Qian fffffff infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
+
+        return block_offsets
 
     def _compute_hidden_states_block_offsets(
             self, prompt_token_page_hashes: List[str], seq_lens: List[int],
@@ -156,6 +175,12 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         start = time.time()
         open(os.path.join(shared_signal_folder, key), mode="w").close()
 
+        # current_time = time.time()
+        # dt = datetime.datetime.fromtimestamp(current_time)
+        # formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+        # print(f"Qian ~~~~~~~~ publish write completion {key} cost {time.time() - start} sec, current time {formatted_time}")
+
     def publish_kv_cache_prefill_ready(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) -> None:
 
         covered_pages = 0
@@ -179,11 +204,16 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 continue
             
             wt = 0
+            start = time.time()
             while not os.path.exists(os.path.join(shared_signal_folder, v_cache_key)):
                 time.sleep(interval)
                 wt += 1
                 if wt % 100 == 0:
-                    print(f"Qian wait for kv cache prefill done {wt} times {v_cache_key}")
+                    current_time = time.time()
+                    dt = datetime.datetime.fromtimestamp(current_time)
+                    formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                    
+                    print(f"Qian wait for kv cache prefill done {wt} times {v_cache_key}, cost {time.time() - start} sec, current time {formatted_time}")
 
     def publish_hidden_states_ready(self, input_token_hashes: List[str], seq_lens: List[int]) -> None:
 
@@ -216,20 +246,25 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                       slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
-        block_offsets, page_size = self._compute_kv_cache_block_offsets(
+        last_hash = prompt_token_page_hashes[-1]
+
+        # print(f"Qian aaaaaa infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
+
+        block_offsets = self._compute_kv_cache_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
             layer_idx, kv_cache)
+    
         
-        try:            
-            if self.conn.rdma_connected:
-                self.conn.rdma_write_cache(kv_cache, block_offsets, page_size)
-            else:
-                self.conn.local_gpu_write_cache(kv_cache, block_offsets, page_size)
 
-            if layer_idx == 0:
-                global count
-                count += len(prompt_seq_lengths)
-                last_hash = prompt_token_page_hashes[-1]
+        # print(f"Qian yyyyyy infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
+        
+        try:       
+            start = time.time()     
+            if self.conn.rdma_connected:
+                self.conn.rdma_write_cache(kv_cache, block_offsets, self.page_size)
+            else:
+                self.conn.local_gpu_write_cache(kv_cache, block_offsets, self.page_size)
+            # print(f"Qian zzzzzzzz infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
 
         except Exception as e:
             logger.error("Failed to write kv_cache: %s", e)
@@ -241,10 +276,18 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                       prompt_seq_lengths: List[int],
                       slot_mapping: torch.Tensor, layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
+        
+        last_hash = prompt_token_page_hashes[-1]
 
+        start = time.time()
+
+        print(f"Qian 111111 infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}")
         self._save_kv_cache(prompt_token_page_hashes, prompt_seq_lengths, slot_mapping, layer_idx, kv_cache)
+        print(f"Qian 222222 infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}")
         self.synchronize()
+        print(f"Qian 333333 infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}")
         self.publish_kv_cache_prefill_ready(prompt_token_page_hashes, prompt_seq_lengths, layer_idx)
+        print(f"Qian 444444 infinite save_kv_cache start at {datetime.datetime.now()} last hash {last_hash} layer {layer_idx}, cost {time.time() - start} sec")
 
     def read_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
@@ -253,7 +296,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         
         self.verify_kv_cache_prefill_ready(prompt_token_page_hashes, prompt_seq_lengths, layer_idx)
 
-        block_offsets, page_size = self._compute_kv_cache_block_offsets(
+        block_offsets = self._compute_kv_cache_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
             layer_idx, kv_cache)
         
@@ -261,7 +304,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         for attempt in range(RETRY_LIMIT):
             try:
-                self.conn.read_cache(kv_cache, block_offsets, page_size)
+                self.conn.read_cache(kv_cache, block_offsets, self.age_size)
                 break  # Exit the loop if successful
             except Exception as e:
                 logger.error("Attempt %d: Failed to read kv_cache: %s", attempt + 1, e)
@@ -327,6 +370,44 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
     def get_match_last_index(self, keys: List[str]) -> int:
         return self.conn.get_match_last_index(keys)
+
+    def download_kv_cache(self, prompt_token_ids: torch.Tensor, block_ids: torch.Tensor) -> None:
+
+        sql_length = [prompt_token_ids.shape[0]]
+
+        prompt_token_page_hashes = compute_token_page_hashes(prompt_token_ids, sql_length, self.tokens_per_page)
+
+        assert len(block_ids) == math.ceil(prompt_token_ids.shape[0] / self.tokens_per_page)
+
+        import datetime
+
+        current_time = time.time()
+        dt = datetime.datetime.fromtimestamp(current_time)
+        formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        print(f"Qian ----------- infinite download_kv_cache start at {formatted_time} last hash {prompt_token_page_hashes[-1]}")
+        start = current_time
+
+        for layer_idx, kv_cache in enumerate(self.kv_cache_list):
+            block_offsets: List[Tuple[str, int]] = []
+            self.verify_kv_cache_prefill_ready(prompt_token_page_hashes, sql_length, layer_idx)
+            for block_idx, block_id in enumerate(block_ids):
+                current_hash = prompt_token_page_hashes[block_idx]
+                k_cache_key, v_cache_key = self.get_kv_cache_key(
+                    current_hash, layer_idx)
+                
+                block_offsets.append((k_cache_key, block_id * self.page_size))
+                block_offsets.append((v_cache_key, block_id * self.page_size + self.k_or_v_total_size))
+
+            try:
+                self.conn.read_cache(kv_cache, block_offsets, self.page_size)
+            except Exception as e:
+                logger.error("read kv cache failed.", e)
+                raise
+
+        current_time = time.time()
+        dt = datetime.datetime.fromtimestamp(current_time)
+        formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        print(f"Qian ----------- infinite download_kv_cache end at {formatted_time} last hash {prompt_token_page_hashes[-1]}, cost {current_time - start} sec")
 
     def synchronize(self) -> None:
         try:

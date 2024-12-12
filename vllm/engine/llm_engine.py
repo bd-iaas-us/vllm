@@ -723,6 +723,15 @@ class LLMEngine:
             for scheduler in self.scheduler
         ]
         min_cost_scheduler = self.scheduler[costs.index(min(costs))]
+        import os
+        start = time.time()
+        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
+            block_tables = min_cost_scheduler.try_allocate_seq_group(seq_group)
+            if len(block_tables) == 0:
+                return None
+            self.model_executor._run_workers("download_kv_cache", seq.prompt_token_ids, block_tables)
+            print(f"Qian ~~~~~~~~ download_kv_cache in LLM Engine {time.time() - start} seconds")
+            
         min_cost_scheduler.add_seq_group(seq_group)
 
         return seq_group

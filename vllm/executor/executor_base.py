@@ -111,6 +111,11 @@ class ExecutorBase(ABC):
         """Checks if the executor is healthy. If not, it should raise an
         exception."""
         raise NotImplementedError
+    
+    @abstractmethod
+    def download_kv_cache(self, prompt_token_ids: List[int], block_ids: List[int]) -> None:
+
+        raise NotImplementedError
 
     def shutdown(self) -> None:
         """Shutdown the executor."""

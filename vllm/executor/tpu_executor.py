@@ -129,7 +129,9 @@ class TPUExecutor(ExecutorBase):
     def check_health(self) -> None:
         # TPUExecutor will always be healthy as long as it's running.
         return
-
+    
+    def download_kv_cache(self, prompt_token_ids: List[int], block_ids: List[int]) -> None:
+        raise NotImplementedError
 
 class TPUExecutorAsync(TPUExecutor, ExecutorAsyncBase):
 

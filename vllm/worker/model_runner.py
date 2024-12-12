@@ -1381,6 +1381,9 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         if not self.prompt_adapter_manager:
             raise RuntimeError("PromptAdapter is not enabled.")
         return self.prompt_adapter_manager.list_adapters()
+    
+    def download_kv_cache(self, prompt_token_ids: List[int], block_ids: List[int]) -> None:
+        raise NotImplementedError
 
     @torch.inference_mode()
     def capture_model(self, kv_caches: List[List[torch.Tensor]]) -> None:

@@ -1,9 +1,12 @@
+import asyncio
 import enum
 import os
 import random
 import time
+import torch
 from collections import deque
 from dataclasses import dataclass, field
+from threading import Thread
 from typing import Callable, Deque, Dict, Iterable, List, Optional
 from typing import Sequence as GenericSequence
 from typing import Set, Tuple, Union
@@ -395,6 +398,10 @@ class Scheduler:
         # for processing and deallocation by the free_finished_seq_groups()
         self._async_stopped: List[SequenceGroup] = []
 
+        # self.ignored_during_download: List[SequenceGroup] = []
+        # if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
+        #     self.start_download_kv_cache_thread()
+
     @property
     def next_cache_id(self):
         return (self.cache_id + 1) % self.num_cache_iters
@@ -409,8 +416,96 @@ class Scheduler:
         return 1
 
     def add_seq_group(self, seq_group: SequenceGroup) -> None:
-        # Add sequence groups to the waiting queue.
+        # # Add sequence groups to the waiting queue.
         self.waiting.append(seq_group)
+
+    # def start_download_kv_cache_thread(self):
+    #     """Starts the asyncio event loop in a separate thread."""
+    #     def run_event_loop():
+    #         self.loop = asyncio.new_event_loop()
+    #         asyncio.set_event_loop(self.loop)
+    #         self.loop.create_task(self._download_kv_cache())
+    #         self.loop.run_forever()  # Keeps the event loop running
+
+    #     # Start the event loop in a separate thread
+    #     thread = Thread(target=run_event_loop)
+    #     thread.start()
+
+    def try_allocate_seq_group(self, seq_group: SequenceGroup) -> List[int]:
+        """Try to allocate a sequence group.
+
+        Args:
+            seq_group: The sequence group to allocate.
+
+        Returns:
+            True if the sequence group is allocated, False otherwise.
+        """
+
+        seqs = seq_group.get_seqs()
+        seq = seqs[0]
+
+        prompt_limit = self._get_prompt_limit(seq_group)
+        if seq.get_len() > prompt_limit:
+            logger.error(
+                "Input prompt (%d tokens) is too long"
+                " and exceeds limit of %d", seq.get_len(), prompt_limit)
+            for seq in seqs:
+                seq.status = SequenceStatus.FINISHED_IGNORED
+            
+            return None
+            
+
+        can_allocate = self.block_manager.can_allocate(seq_group, 0)
+
+        # need more logics to handle AllocStatus.LATER
+        # for the PD disaggregation PoC, just ignored the case of AllocStatus.LATER                
+        if can_allocate != AllocStatus.OK:
+            logger.error(
+                "failed to allocat block for request %s", seq_group.request_id)
+            for seq in seqs:
+                seq.status = SequenceStatus.FINISHED_IGNORED
+            
+            return None
+
+        self.block_manager.allocate(seq_group)
+
+        return self.block_manager.block_tables[seq.seq_id].physical_block_ids
+
+    # async def _download_kv_cache(self):
+    #     """Process the elements in the waiting queue."""
+    #     kv_cache_transporter = self.cache_config.kv_cache_transporter
+    #     while True:
+    #         if self.downloading:
+    #             seq_group = self.downloading[0]  # Get the next element
+    #             seqs = seq_group.get_seqs(status=SequenceStatus.WAITING)
+    #             assert len(seqs) == 1, (
+    #             "sequence group should have only one prompt sequence.")
+    #             seq = seqs[0]
+
+    #             can_allocate = self.block_manager.can_allocate(seq_group, 0)
+                
+    #             if can_allocate == AllocStatus.OK:
+    #                 self.block_manager.allocate(seq_group)
+
+    #                 prompt_token_ids = torch.tensor(seq.prompt_token_ids)
+    #                 block_ids = torch.tensor(
+    #                     self.block_manager.block_tables[seq.seq_id].physical_block_ids)
+
+    #                 kv_cache_transporter.download_kv_cache(prompt_token_ids, block_ids)
+
+    #                 self.downloading.popleft()
+    #                 self.waiting.append(seq_group)
+    #             elif can_allocate == AllocStatus.LATER:
+    #                 await asyncio.sleep(0.1)
+    #             elif can_allocate == AllocStatus.NEVER:
+    #                 logger.warning("ignored the request %s due to insufficient kv cache.", seq_group.request_id)
+    #                 for seq in seq_group.get_seqs():
+    #                     seq.status = SequenceStatus.FINISHED_IGNORED
+    #                 # merge the with other ignored requests
+    #                 self.ignored_during_download.append(seq_group)
+    #                 self.downloading.popleft()
+    #         else:
+    #             await asyncio.sleep(0.1)       # Avoid busy-waiting
 
     def _add_seq_group_to_running(self, seq_group: SequenceGroup) -> None:
         # Add sequence groups to the running queue.
@@ -839,6 +934,63 @@ class Scheduler:
         self.waiting = waiting_queue
         self.running = running_queue
         return force_preemption_count
+    
+    def _schedule_first_decode(self,
+        budget: SchedulingBudget,
+        curr_loras: Optional[Set[int]],
+        enable_chunking: bool = False,
+    ) -> SchedulerPrefillOutputs:
+        
+        """Schedule sequence groups for the first FP in the decoding side of PD disaggregation."""
+
+        # in PD disaggregation PoC, we ignored the case of lora/multi-step/chunk-prefilling and focus on the happy path
+
+        seq_groups: List[ScheduledSequenceGroup] = []
+        waiting_queue = self.waiting
+        max_seqs = 1
+
+        while self._passed_delay(time.time()) and waiting_queue:
+            seq_group = waiting_queue[0]
+
+            waiting_seqs = seq_group.get_seqs(status=SequenceStatus.WAITING)
+            assert len(waiting_seqs) == 1, (
+                "Waiting sequence group should have only one prompt "
+                "sequence.")
+            num_new_tokens = self._get_num_new_tokens(seq_group,
+                                                      SequenceStatus.WAITING,
+                                                      enable_chunking, budget)
+
+
+            num_new_seqs = seq_group.get_max_num_running_seqs()
+       
+            if (num_new_tokens == 0
+                    or not budget.can_schedule(num_new_tokens=num_new_tokens,
+                                               num_new_seqs=1)):
+                break
+
+        
+            seq_groups.append(
+                ScheduledSequenceGroup(seq_group=seq_group,
+                                       token_chunk_size=num_new_tokens))
+            budget.add_num_batched_tokens(seq_group.request_id, num_new_tokens)
+            budget.add_num_seqs(seq_group.request_id, num_new_seqs)
+
+            for seq in seq_group.get_seqs(status=SequenceStatus.WAITING):
+                seq.status = SequenceStatus.RUNNING
+
+            waiting_queue.popleft()
+             # to improve TTFT, we schedule one seq in each step in the first decode forward pass
+            if len(seq_groups) >= max_seqs:
+                break
+
+        if len(seq_groups) > 0:
+            self.prev_prompt = True
+
+        return SchedulerPrefillOutputs(
+            seq_groups=seq_groups,
+            ignored_seq_groups=[],
+            num_lookahead_slots=self._get_num_lookahead_slots(
+                is_prefill=True, enable_chunking=False))
 
     def _schedule_prefills(
         self,
@@ -869,6 +1021,10 @@ class Scheduler:
         Returns:
             SchedulerPrefillOutputs.
         """
+
+        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
+            return self._schedule_first_decode(budget, curr_loras, enable_chunking)
+
         ignored_seq_groups: List[SequenceGroup] = []
         seq_groups: List[ScheduledSequenceGroup] = []
 
@@ -1414,7 +1570,7 @@ class Scheduler:
     def _allocate_and_set_running(self, seq_group: SequenceGroup) -> None:
         self.block_manager.allocate(seq_group)
         for seq in seq_group.get_seqs(status=SequenceStatus.WAITING):
-            seq.status = SequenceStatus.RUNNING
+                seq.status = SequenceStatus.RUNNING
 
     def _append_slots(self,
                       seq_group: SequenceGroup,

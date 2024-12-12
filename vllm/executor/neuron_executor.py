@@ -94,6 +94,9 @@ class NeuronExecutor(ExecutorBase):
         # NeuronExecutor will always be healthy as long as
         # it's running.
         return
+    
+    def download_kv_cache(self, prompt_token_ids: List[int], block_ids: List[int]) -> None:
+        raise NotImplementedError
 
 
 class NeuronExecutorAsync(NeuronExecutor, ExecutorAsyncBase):

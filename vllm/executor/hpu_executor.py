@@ -190,6 +190,9 @@ class HPUExecutor(ExecutorBase):
     def shutdown(self) -> None:
         self.driver_worker.shutdown_inc()
 
+    def download_kv_cache(self, prompt_token_ids: List[int], block_ids: List[int]) -> None:
+        raise NotImplementedError
+
 
 class HPUExecutorAsync(HPUExecutor, ExecutorAsyncBase):
 

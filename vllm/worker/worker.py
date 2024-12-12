@@ -438,6 +438,11 @@ class Worker(LocalOrDistributedWorkerBase):
 
     def list_prompt_adapters(self) -> Set[int]:
         return self.model_runner.list_prompt_adapters()
+    
+    def download_kv_cache(self, prompt_token_ids: List[int], block_ids: List[int]) -> None:
+        prompt_token_ids = torch.tensor(prompt_token_ids, device=self.device)
+        block_ids = torch.tensor(block_ids, device=self.device)
+        self.cache_config.kv_cache_transporter.download_kv_cache(prompt_token_ids, block_ids)
 
     @property
     def max_model_len(self) -> int:
