@@ -61,6 +61,8 @@ from .utils import (AutoWeightsLoader, PPMissingLayer, is_pp_missing_parameter,
                     make_empty_intermediate_tensors_factory, make_layers,
                     maybe_prefix)
 
+import datetime
+
 count = 0
 
 class LlamaMLP(nn.Module):
@@ -357,20 +359,12 @@ class LlamaModel(nn.Module):
         #         return hidden_states
 
         if fp_type == ForwardPassType.FIRST_DECODE:        
+            print(f"Qian ---- first decode start , last hash {input_token_hashes[-1]}, rank {get_tensor_model_parallel_rank()} {datetime.datetime.now()}")
             kv_cache_transporter.read_hidden_states(input_token_hashes,
                                             attn_metadata.seq_lens,
                                             hidden_states)
-            start2 = time.time()
             kv_cache_transporter.synchronize()
-            import datetime
-            current_time = time.time()
-            dt = datetime.datetime.fromtimestamp(current_time)
-            formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-            last_hash = input_token_hashes[-1] if len(input_token_hashes) > 0 else "None"
-
-            print(f"Qian ---- first decoding, {current_time - start2} sec, last hash {last_hash}, {formatted_time}, {len(attn_metadata.seq_lens)} ")
-            
+            print(f"Qian +++++ first decode finish , last hash {input_token_hashes[-1]}, rank {get_tensor_model_parallel_rank()} {datetime.datetime.now()}")
             return hidden_states
 
         # work number is for future tuning
@@ -388,7 +382,6 @@ class LlamaModel(nn.Module):
 
                 def wait_and_save(event, i):
                     event.synchronize()  # Blocks CPU until GPU signals this event
-                    t2 = time.time()
                     # Now save the kv cache
                     kv_cache_transporter.save_kv_cache(
                         input_token_hashes, attn_metadata.seq_lens, block_ids, i,
@@ -417,18 +410,13 @@ class LlamaModel(nn.Module):
 
         torch.cuda.synchronize()
 
-        import datetime
         current_time = time.time()
-        dt = datetime.datetime.fromtimestamp(current_time)
-        formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         last_hash = input_token_hashes[-1] if len(input_token_hashes) > 0 else "None"
 
         if (attn_metadata.prefill_metadata is not None
             and attn_metadata.decode_metadata is None):
-            print(f"Qian ---- collect prefill time consumption, {current_time - start} seconds, last hash {last_hash}, {formatted_time}, seq {len(attn_metadata.seq_lens)}, rank {get_tensor_model_parallel_rank()} ")
-        else:
-            print(f"Qian ---- decoding, {formatted_time} {len(attn_metadata.seq_lens)} ")
+            print(f"Qian ---- collect prefill time consumption, {current_time - start} seconds, last hash {last_hash}, {datetime.datetime.now()}, seq {len(attn_metadata.seq_lens)}, rank {get_tensor_model_parallel_rank()} ")
 
         return hidden_states
 
