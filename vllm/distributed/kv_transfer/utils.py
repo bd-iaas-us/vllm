@@ -41,17 +41,20 @@ def prepare_kv_cache_transport(input_ids, attn_metadata, cache_config, kwargs):
     fp_type = get_forward_pass_type(input_ids, attn_metadata)
 
     input_token_hashes = []
-    block_ids = []
+    offsets = []
     kv_cache_transporter = cache_config.kv_cache_transporter
     if fp_type in (ForwardPassType.PREFILL, ForwardPassType.FIRST_DECODE):
         input_token_hashes = compute_token_page_hashes(input_ids,
-                                                       attn_metadata.seq_lens)
+                                                       attn_metadata.seq_lens,
+                                                       kv_cache_transporter.tokens_per_page)
 
         # Compute block ids for each page in the input sequence
         assert kv_cache_transporter is not None
         seq_start_index = 0
         page_start_index = 0
         tokens_per_page = kv_cache_transporter.tokens_per_page
+        page_size = kv_cache_transporter.page_size
+        k_or_v_total_size = kv_cache_transporter.k_or_v_total_size
         for seq_length in attn_metadata.seq_lens:
             num_pages = math.ceil(seq_length / tokens_per_page)
 
@@ -61,14 +64,16 @@ def prepare_kv_cache_transport(input_ids, attn_metadata, cache_config, kwargs):
                 slot_mapping_value = attn_metadata.slot_mapping[seq_start_index +
                                                       start_token_idx].item()
 
-                block_ids.append(slot_mapping_value //tokens_per_page)
+                block_id = slot_mapping_value //tokens_per_page
+                k_offset = block_id * page_size
+                offsets.append((k_offset, k_offset + k_or_v_total_size))
 
             seq_start_index += seq_length
             page_start_index += num_pages
 
-        assert len(block_ids) == len(input_token_hashes)
+        assert len(offsets) == len(input_token_hashes)
 
-    return fp_type, kv_cache_transporter, input_token_hashes, block_ids
+    return fp_type, kv_cache_transporter, input_token_hashes, offsets
 
 
 def finalize_kv_cache_transport(fp_type, kv_cache_transporter,
@@ -90,9 +95,10 @@ def compute_token_page_hashes(prompt_token_ids: torch.Tensor,
     hashes = []
     seq_index = 0
 
+    prompt_ids = prompt_token_ids.cpu().numpy()
+
     for seq_len in prompt_seq_lengths:
-        seq_tokens = prompt_token_ids[seq_index:seq_index +
-                                      seq_len].cpu().numpy()
+        seq_tokens = prompt_ids[seq_index:seq_index + seq_len]
         num_pages = math.ceil(seq_len / tokens_per_page)
         prev_hash = ""
 

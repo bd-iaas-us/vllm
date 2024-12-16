@@ -7,7 +7,7 @@ class KVCacheTransporterBase(ABC):
 
     @abstractmethod
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
-                      block_ids: List[int], layer_idx: int,
+                      offsets: List[Tuple[int, int]], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
         raise NotImplementedError
@@ -15,7 +15,7 @@ class KVCacheTransporterBase(ABC):
     @abstractmethod
     def read_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
-                      block_ids: List[int], layer_idx: int,
+                      offsets: List[Tuple[int, int]], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
         raise NotImplementedError

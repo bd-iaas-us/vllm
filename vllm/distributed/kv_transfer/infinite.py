@@ -4,7 +4,6 @@ from typing import Dict, List, Tuple
 import torch
 import os
 import time
-
 import infinistore
 
 from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
@@ -100,17 +99,15 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         return k_cache_key, v_cache_key
 
     def _compute_kv_cache_block_offsets(
-            self, prompt_token_page_hashes: List[str], block_ids: List[int],
+            self, prompt_token_page_hashes: List[str], offsets: List[Tuple[int, int]],
             layer_idx: int) -> List[Tuple[str, int]]:
         
         block_offsets: List[Tuple[str, int]] = []
 
-        for idx in range(len(block_ids)):
-            current_hash = prompt_token_page_hashes[idx]
-            k_cache_key, v_cache_key = self.get_kv_cache_key(
-                current_hash, layer_idx)
-            block_offsets.append((k_cache_key, block_ids[idx] * self.page_size))
-            block_offsets.append((v_cache_key, block_ids[idx] * self.page_size + self.k_or_v_total_size))
+        for current_hash, offset in zip(prompt_token_page_hashes, offsets):
+            k_cache_key, v_cache_key = self.get_kv_cache_key(current_hash, layer_idx)
+            block_offsets.append((k_cache_key, offset[0]))
+            block_offsets.append((v_cache_key, offset[1]))
 
         return block_offsets
 
@@ -180,14 +177,11 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                     print(f"Qian wait for kv cache prefill done {wt} times {v_cache_key}")
 
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
-                      block_ids: List[int], layer_idx: int,
+                      offsets: List[Tuple[int, int]], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
-        # if layer_idx == 0:
-        #     print("Qian------ last hash: ", prompt_token_page_hashes[-1])
-
         block_offsets = self._compute_kv_cache_block_offsets(
-            prompt_token_page_hashes, block_ids, layer_idx)
+            prompt_token_page_hashes, offsets, layer_idx)
         
         try:            
             if self.conn.rdma_connected:
@@ -203,14 +197,13 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
     def read_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
-                      block_ids: List[int], layer_idx: int,
+                      offsets: List[Tuple[int, int]], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
         
         self.verify_kv_cache_prefill_done(prompt_token_page_hashes, prompt_seq_lengths, layer_idx)
 
         block_offsets = self._compute_kv_cache_block_offsets(
-            prompt_token_page_hashes, block_ids,
-            layer_idx)
+            prompt_token_page_hashes, offsets, layer_idx)
         
         RETRY_LIMIT = 10
 
