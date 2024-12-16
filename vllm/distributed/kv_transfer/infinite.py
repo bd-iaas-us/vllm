@@ -87,14 +87,16 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         print("~~~~~~~~~~~~~~~~~ tp rank ", self.tp_rank, " tp size ", self.tp_size)
 
+        self.hs_key_initial = f"hs_{self.model}_tp_{self.tp_rank}_{self.tp_size}_"
+        self.kv_key_initial = f"{self.model}_tp_{self.tp_rank}_{self.tp_size}_"
+
 
     def get_hidden_states_cache_key(self, page_hash: str) -> str:
-        return f"{self.model}_{page_hash}_tp_{self.tp_rank}_{self.tp_size}_hs"
-    
+        return self.hs_key_initial + page_hash
+  
     def get_kv_cache_key(self, page_hash: str, layer_idx: int) -> Tuple[str, str]:
-        initial = f"{self.model}_{page_hash}_layer_{layer_idx}_tp_{self.tp_rank}_{self.tp_size}"
-        k_cache_key = f"{initial}_k"
-        v_cache_key = f"{initial}_v"
+        k_cache_key = self.kv_key_initial + f"{layer_idx}_{page_hash}_k"
+        v_cache_key = self.kv_key_initial + f"{layer_idx}_{page_hash}_v"
         return k_cache_key, v_cache_key
 
     def _compute_kv_cache_block_offsets(
