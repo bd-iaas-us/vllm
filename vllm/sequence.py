@@ -9,6 +9,7 @@ from functools import reduce
 from typing import Any, Callable, DefaultDict, Dict, List, Mapping, Optional
 from typing import Sequence as GenericSequence
 from typing import Set, Tuple, Union
+import os
 
 import msgspec
 import torch
@@ -65,6 +66,8 @@ class SequenceStatus(enum.IntEnum):
     FINISHED_LENGTH_CAPPED = 4
     FINISHED_ABORTED = 5
     FINISHED_IGNORED = 6
+
+    DOWNLOADING = 7
 
     @staticmethod
     def is_finished(status: "SequenceStatus") -> bool:
@@ -420,7 +423,10 @@ class Sequence:
         self.output_logprobs: SampleLogprobs = []
         self.output_text = ""
 
-        self.status = SequenceStatus.WAITING
+        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
+            self.status = SequenceStatus.DOWNLOADING
+        else:
+            self.status = SequenceStatus.WAITING
         self.stop_reason: Union[int, str, None] = None
 
         # These are used to keep track of delta outputs

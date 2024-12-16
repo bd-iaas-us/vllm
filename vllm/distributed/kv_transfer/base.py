@@ -55,5 +55,5 @@ class KVCacheTransporterBase(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def download_kv_cache(self, prompt_token_ids: torch.Tensor, block_ids: torch.Tensor) -> None:
+    def download_kv_cache(self, prompt_token_ids: torch.Tensor, block_ids: List[int]) -> None:
         raise NotImplementedError

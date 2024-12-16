@@ -2,6 +2,7 @@
 from typing import Dict, List, Optional
 from typing import Sequence as GenericSequence
 from typing import Tuple
+import os
 
 from vllm.core.block.block_table import BlockTable
 from vllm.core.block.cpu_gpu_block_allocator import CpuGpuBlockAllocator
@@ -112,8 +113,10 @@ class SelfAttnBlockSpaceManager(BlockSpaceManager):
         # the same prompt. This may not be true for preempted sequences.
 
         check_no_caching_or_swa_for_blockmgr_encdec(self, seq_group)
-
-        seq = seq_group.get_seqs(status=SequenceStatus.WAITING)[0]
+        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
+            seq = seq_group.get_seqs(status=SequenceStatus.DOWNLOADING)[0]
+        else:
+            seq = seq_group.get_seqs(status=SequenceStatus.WAITING)[0]
         num_required_blocks = BlockTable.get_num_required_blocks(
             seq.get_token_ids(),
             block_size=self.block_size,
@@ -159,7 +162,10 @@ class SelfAttnBlockSpaceManager(BlockSpaceManager):
     def allocate(self, seq_group: SequenceGroup) -> None:
 
         # Allocate self-attention block tables for decoder sequences
-        waiting_seqs = seq_group.get_seqs(status=SequenceStatus.WAITING)
+        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
+            waiting_seqs = seq_group.get_seqs(status=SequenceStatus.DOWNLOADING)
+        else:
+            waiting_seqs = seq_group.get_seqs(status=SequenceStatus.WAITING)
         assert not (set(seq.seq_id for seq in waiting_seqs)
                     & self.block_tables.keys()), "block table already exists"
 

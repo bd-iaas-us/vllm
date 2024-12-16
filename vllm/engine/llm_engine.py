@@ -420,12 +420,16 @@ class LLMEngine:
         # Create the scheduler.
         # NOTE: the cache_config here have been updated with the numbers of
         # GPU and CPU blocks, which are profiled in the distributed executor.
+        import os
+        model_executor_in_scheduler = self.model_executor if (
+            os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode") else None
         self.scheduler = [
             Scheduler(
                 scheduler_config, cache_config, lora_config,
                 parallel_config.pipeline_parallel_size,
                 self.async_callbacks[v_id]
-                if model_config.use_async_output_proc else None)
+                if model_config.use_async_output_proc else None,
+                model_executor_in_scheduler)
             for v_id in range(parallel_config.pipeline_parallel_size)
         ]
 
@@ -722,18 +726,9 @@ class LLMEngine:
             scheduler.get_num_unfinished_seq_groups()
             for scheduler in self.scheduler
         ]
-        min_cost_scheduler = self.scheduler[costs.index(min(costs))]
-        import os
-        start = time.time()
-        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
-            block_tables = min_cost_scheduler.try_allocate_seq_group(seq_group)
-            if len(block_tables) == 0:
-                return None
-            self.model_executor._run_workers("download_kv_cache", seq.prompt_token_ids, block_tables)
-            print(f"Qian ~~~~~~~~ download_kv_cache in LLM Engine {time.time() - start} seconds")
-            
-        min_cost_scheduler.add_seq_group(seq_group)
+        min_cost_scheduler = self.scheduler[costs.index(min(costs))]     
 
+        min_cost_scheduler.add_seq_group(seq_group)
         return seq_group
 
     def stop_remote_worker_execution_loop(self) -> None:

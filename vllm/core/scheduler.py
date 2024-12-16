@@ -1,9 +1,11 @@
 import asyncio
+import datetime
 import enum
 import os
 import random
 import time
 import torch
+import threading
 from collections import deque
 from dataclasses import dataclass, field
 from threading import Thread
@@ -20,6 +22,7 @@ from vllm.sequence import (Sequence, SequenceData, SequenceGroup,
                            SequenceGroupMetadata, SequenceGroupMetadataDelta,
                            SequenceStatus)
 from vllm.utils import Device, PyObjectCache
+from vllm.executor.executor_base import ExecutorBase
 
 logger = init_logger(__name__)
 
@@ -307,6 +310,7 @@ class Scheduler:
         lora_config: Optional[LoRAConfig],
         pipeline_parallel_size: int = 1,
         output_proc_callback: Optional[Callable] = None,
+        model_executor: ExecutorBase = None,
     ) -> None:
         self.scheduler_config = scheduler_config
         self.cache_config = cache_config
@@ -338,7 +342,8 @@ class Scheduler:
             num_cpu_blocks=num_cpu_blocks,
             sliding_window=self.cache_config.sliding_window,
             enable_caching=self.cache_config.enable_prefix_caching)
-
+        
+        self.downloading: Deque[SequenceGroup] = deque()
         # Sequence groups in the WAITING state.
         # Contain new prefill or preempted requests.
         self.waiting: Deque[SequenceGroup] = deque()
@@ -398,9 +403,16 @@ class Scheduler:
         # for processing and deallocation by the free_finished_seq_groups()
         self._async_stopped: List[SequenceGroup] = []
 
-        # self.ignored_during_download: List[SequenceGroup] = []
-        # if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
-        #     self.start_download_kv_cache_thread()
+        self.ignored_during_download: List[SequenceGroup] = []
+        # self.download_async = asyncio.Condition()
+        # self.waiting_lock = threading.Lock()
+        self.download_lock = asyncio.Lock() 
+        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
+            self.model_executor = model_executor
+            # self.start_download_kv_cache_thread()
+
+            self.loop = asyncio.get_event_loop()
+            self.loop_thread = None
 
     @property
     def next_cache_id(self):
@@ -414,98 +426,157 @@ class Scheduler:
     def num_decoding_tokens_per_seq(self) -> int:
         """The number of new tokens."""
         return 1
+            
+    def _check_and_move_downloaded_groups(self) -> None:
+        remaining_queue = deque()
+        while self.downloading:
+            seq_group = self.downloading.popleft()
+            seqs = seq_group.get_seqs()
+            if seqs[0].status == SequenceStatus.WAITING:
+                self.waiting.append(seq_group)
+            else:
+                remaining_queue.append(seq_group)
+        self.downloading = remaining_queue
+    
+    def _start_loop(self):
+        """Start the event loop in a separate thread."""
+        def run_loop():
+            print("Starting event loop...")
+            asyncio.set_event_loop(self.loop)
+            self.loop.run_forever()
 
+ 
+        self.loop_thread = threading.Thread(target=run_loop, daemon=True)
+        self.loop_thread.start()
+    
     def add_seq_group(self, seq_group: SequenceGroup) -> None:
         # # Add sequence groups to the waiting queue.
-        self.waiting.append(seq_group)
+        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
+            print(f"Qian ~~~~~~~~~~~~~~~~ add_seq_group {seq_group.request_id} {datetime.datetime.now()}")
+            self.downloading.append(seq_group)
 
+            if not self.loop.is_running():
+                self._start_loop()
+            try:
+                # asyncio.create_task(self._download_kv_cache(seq_group))
+                asyncio.run_coroutine_threadsafe(self._download_kv_cache(seq_group), self.loop) 
+
+            except Exception as e:
+                print(f"Qian ~~~~~~~~~~~~~~~~ exceptioon create task add_seq_group {seq_group.request_id} {e}")
+        else:
+            self.waiting.append(seq_group)
+
+    async def _download_kv_cache(self, seq_group: SequenceGroup):
+        async with self.download_lock: 
+            try:
+                print(f"Qian ~~~~~~~~~~~~~~~~ lock acquired {datetime.datetime.now()}")
+                can_allocate = self.block_manager.can_allocate(seq_group, 0)
+                if can_allocate == AllocStatus.OK:
+                    seqs = seq_group.get_seqs()
+                    assert len(seqs) == 1, "sequence group should have only one prompt sequence."
+                    seq = seqs[0]
+                    self.block_manager.allocate(seq_group)
+                    prompt_token_ids = torch.tensor(seq.prompt_token_ids)
+                    block_ids = self.block_manager.block_tables[seq.seq_id].physical_block_ids
+
+                    print(f"Qian ~~~~~~~~~~~~~~~~ start downloading {seq_group.request_id} {datetime.datetime.now()}")
+                    # self.model_executor._run_workers("download_kv_cache", prompt_token_ids, block_ids)
+                    await asyncio.to_thread(self.model_executor._run_workers, "download_kv_cache", prompt_token_ids, block_ids)
+
+                    # self.waiting.append(seq_group)
+
+                    print(f"Qian ~~~~~~~~~~~~~~~~ inserted to waiting queue {seq_group.request_id} {datetime.datetime.now()}")
+                    seq.status = SequenceStatus.WAITING
+
+                elif can_allocate == AllocStatus.LATER:
+                    # Allocation might be possible later
+                    self.downloading.append(seq_group)
+
+                elif can_allocate == AllocStatus.NEVER:
+                    # Cannot allocate ever; ignore this request
+                    logger.warning("ignored the request %s due to insufficient kv cache.", seq_group.request_id)
+                    for s in seq_group.get_seqs():
+                        s.status = SequenceStatus.FINISHED_IGNORED
+                    self.ignored_during_download.append(seq_group)
+
+                else:
+                    # No items to download; wait before checking again
+                    logger.warning("unexpected allocation status: request %s.", seq_group.request_id)
+            except Exception as e:
+                print(f"Qian ~~~~~~~~~~~~~~~~ exceptioon download_kv_cache {seq_group.request_id} {e}")
+
+
+
+    # async def _add_seq_group_async(self, seq_group):
+    #     async with self.download_async:
+    #         self.downloading.append(seq_group)
+    #         print(f"Qian ~~~~~~~~~~~~~~~~ len {len(self.downloading)} added _seq_group {seq_group.request_id} {datetime.datetime.now()}")
+    #         self.download_async.notify()
+    
     # def start_download_kv_cache_thread(self):
     #     """Starts the asyncio event loop in a separate thread."""
     #     def run_event_loop():
     #         self.loop = asyncio.new_event_loop()
     #         asyncio.set_event_loop(self.loop)
     #         self.loop.create_task(self._download_kv_cache())
-    #         self.loop.run_forever()  # Keeps the event loop running
+    #         try:
+    #             self.loop.run_forever()  # Keeps the event loop running
+    #         finally:
+    #             print("Qian ~~~~~~~~~~~~~~~~ run_event_loop close")   
+    #             self.loop.close()
 
     #     # Start the event loop in a separate thread
-    #     thread = Thread(target=run_event_loop)
+    #     thread = Thread(target=run_event_loop, daemon=True)
     #     thread.start()
-
-    def try_allocate_seq_group(self, seq_group: SequenceGroup) -> List[int]:
-        """Try to allocate a sequence group.
-
-        Args:
-            seq_group: The sequence group to allocate.
-
-        Returns:
-            True if the sequence group is allocated, False otherwise.
-        """
-
-        seqs = seq_group.get_seqs()
-        seq = seqs[0]
-
-        prompt_limit = self._get_prompt_limit(seq_group)
-        if seq.get_len() > prompt_limit:
-            logger.error(
-                "Input prompt (%d tokens) is too long"
-                " and exceeds limit of %d", seq.get_len(), prompt_limit)
-            for seq in seqs:
-                seq.status = SequenceStatus.FINISHED_IGNORED
-            
-            return None
-            
-
-        can_allocate = self.block_manager.can_allocate(seq_group, 0)
-
-        # need more logics to handle AllocStatus.LATER
-        # for the PD disaggregation PoC, just ignored the case of AllocStatus.LATER                
-        if can_allocate != AllocStatus.OK:
-            logger.error(
-                "failed to allocat block for request %s", seq_group.request_id)
-            for seq in seqs:
-                seq.status = SequenceStatus.FINISHED_IGNORED
-            
-            return None
-
-        self.block_manager.allocate(seq_group)
-
-        return self.block_manager.block_tables[seq.seq_id].physical_block_ids
-
+    #     print("Qian ~~~~~~~~~~~~~~~~ start_download_kv_cache_thread")
+    
     # async def _download_kv_cache(self):
-    #     """Process the elements in the waiting queue."""
-    #     kv_cache_transporter = self.cache_config.kv_cache_transporter
     #     while True:
-    #         if self.downloading:
-    #             seq_group = self.downloading[0]  # Get the next element
-    #             seqs = seq_group.get_seqs(status=SequenceStatus.WAITING)
-    #             assert len(seqs) == 1, (
-    #             "sequence group should have only one prompt sequence.")
-    #             seq = seqs[0]
 
-    #             can_allocate = self.block_manager.can_allocate(seq_group, 0)
-                
-    #             if can_allocate == AllocStatus.OK:
-    #                 self.block_manager.allocate(seq_group)
+    #         async with self.download_async:
+    #             await self.download_async.wait()  # Wait for a notification
 
-    #                 prompt_token_ids = torch.tensor(seq.prompt_token_ids)
-    #                 block_ids = torch.tensor(
-    #                     self.block_manager.block_tables[seq.seq_id].physical_block_ids)
+    #         print(f"Qian >>>>>>>>>>>  got notifications {datetime.datetime.now()}")
+    #         assert len(self.downloading) > 0, "download queue is empty."
 
-    #                 kv_cache_transporter.download_kv_cache(prompt_token_ids, block_ids)
+    #         async with self.download_lock:
+    #             seq_group = self.downloading.popleft()
+            
+    #         seqs = seq_group.get_seqs()
+    #         assert len(seqs) == 1, "sequence group should have only one prompt sequence."
+    #         seq = seqs[0]
 
-    #                 self.downloading.popleft()
+    #         can_allocate = self.block_manager.can_allocate(seq_group, 0)
+
+    #         if can_allocate == AllocStatus.OK:
+    #             # Allocation succeeded
+    #             self.block_manager.allocate(seq_group)
+    #             prompt_token_ids = torch.tensor(seq.prompt_token_ids)
+    #             block_ids = self.block_manager.block_tables[seq.seq_id].physical_block_ids
+
+    #                 print(f"Qian ~~~~~~~~~~~~~~~~ start downloading {seq_group.request_id} {datetime.datetime.now()}")
+    #                 # self.model_executor._run_workers("download_kv_cache", prompt_token_ids, block_ids)
+    #                 await asyncio.to_thread(self.model_executor._run_workers, "download_kv_cache", prompt_token_ids, block_ids)
+
     #                 self.waiting.append(seq_group)
+
+    #                 print(f"Qian ~~~~~~~~~~~~~~~~ inserted to waiting queue {seq_group.request_id} {datetime.datetime.now()}")
+
     #             elif can_allocate == AllocStatus.LATER:
-    #                 await asyncio.sleep(0.1)
+    #                 # Allocation might be possible later
+    #                 self.downloading.append(seq_group)
+
     #             elif can_allocate == AllocStatus.NEVER:
+    #                 # Cannot allocate ever; ignore this request
     #                 logger.warning("ignored the request %s due to insufficient kv cache.", seq_group.request_id)
-    #                 for seq in seq_group.get_seqs():
-    #                     seq.status = SequenceStatus.FINISHED_IGNORED
-    #                 # merge the with other ignored requests
+    #                 for s in seq_group.get_seqs():
+    #                     s.status = SequenceStatus.FINISHED_IGNORED
     #                 self.ignored_during_download.append(seq_group)
-    #                 self.downloading.popleft()
-    #         else:
-    #             await asyncio.sleep(0.1)       # Avoid busy-waiting
+
+    #             else:
+    #                 # No items to download; wait before checking again
+    #                 logger.warning("unexpected allocation status: request %s.", seq_group.request_id)
+
 
     def _add_seq_group_to_running(self, seq_group: SequenceGroup) -> None:
         # Add sequence groups to the running queue.
@@ -533,7 +604,8 @@ class Scheduler:
         if isinstance(request_id, str):
             request_id = (request_id, )
         request_ids = set(request_id)
-        for state_queue in [self.waiting, self.running, self.swapped]:
+        # TODO: handle the case where the request is in the downloading queue
+        for state_queue in [self.waiting, self.running, self.swapped, self.downloading]:
             aborted_groups: List[SequenceGroup] = []
             for seq_group in state_queue:
                 if not request_ids:
@@ -570,13 +642,13 @@ class Scheduler:
 
     def has_unfinished_seqs(self) -> bool:
         return len(self.waiting) != 0 or len(self.running) != 0 or len(
-            self.swapped) != 0
+            self.swapped) != 0 or len(self.downloading) != 0
 
     def get_prefix_cache_hit_rate(self, device: Device) -> float:
         return self.block_manager.get_prefix_cache_hit_rate(device)
 
     def get_num_unfinished_seq_groups(self) -> int:
-        return len(self.waiting) + len(self.running) + len(self.swapped)
+        return len(self.waiting) + len(self.running) + len(self.swapped) + len(self.downloading)
 
     def get_and_reset_finished_requests_ids(self) -> List[str]:
         """Flushes the list of request ids of previously finished seq_groups."""
@@ -1328,6 +1400,9 @@ class Scheduler:
 
     def _schedule(self) -> SchedulerOutputs:
         """Schedule queued requests."""
+        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "decode":
+            self._check_and_move_downloaded_groups()
+
         if self.scheduler_config.chunked_prefill_enabled:
             return self._schedule_chunked_prefill()
         else:
@@ -1370,6 +1445,7 @@ class Scheduler:
         # Schedule sequence groups.
         # This function call changes the internal states of the scheduler
         # such as self.running, self.swapped, and self.waiting.
+
         scheduler_start_time = time.perf_counter()
 
         scheduler_outputs: SchedulerOutputs = self._schedule()
@@ -1516,7 +1592,6 @@ class Scheduler:
         # Move to next cache (if exists)
         self.cache_id = self.next_cache_id
 
-        # Return results
         return (seq_group_metadata_list, scheduler_outputs,
                 allow_async_output_proc)
 
