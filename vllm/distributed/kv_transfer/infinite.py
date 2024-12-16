@@ -22,8 +22,9 @@ shared_signal_folder = "/tmp/infinistore"
 class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     #Class-level singleton connection instance
     _singleton_conn = None
+    _singleton_rdma_conn = None
 
-    def __init__(self, model: str, tokens_per_page=16) -> None:
+    def __init__(self, model: str, kv_cache_list: List[torch.Tensor], tokens_per_page: int =16) -> None:
         if not model:
             raise ValueError("model cannot be empty.")
         if tokens_per_page <= 0:
@@ -31,7 +32,10 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         # escape the slash in the model name
         self.model = model.replace("/", "_")
+        self.kv_cache_list = kv_cache_list
         self.tokens_per_page = tokens_per_page
+        self.page_size = kv_cache_list[0][0][0].numel() 
+        self.k_or_v_total_size = kv_cache_list[0][0].numel()
 
         #TODO: when server is local, use connection_type=infinistore.TYPE_LOCAL_GPU,
         # otherwise RDMA
@@ -59,10 +63,30 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         # Assign the singleton connection to the instance attribute
         self.conn = InfiniStoreKVCacheTransporter._singleton_conn
 
+        # if self.conn.rdma_connected:
+        #     self.rdma_conn = self.conn
+        # else:
+        #     if InfiniStoreKVCacheTransporter._singleton_rdma_conn is None:
+        #         infinite_rdma_config = infinistore.ClientConfig(
+        #             host_addr=infinite_server,
+        #             service_port=22345,
+        #             log_level="info",
+        #             connection_type=infinistore.TYPE_RDMA,
+        #             ib_port=1,
+        #             link_type="Ethernet",
+        #             dev_name="mlx5_0",
+        #         )
+        #         InfiniStoreKVCacheTransporter._singleton_rdma_conn = infinistore.InfinityConnection(infinite_rdma_config)
+        #         InfiniStoreKVCacheTransporter._singleton_rdma_conn.connect()
+        #         logger.info("RDMA Connecting to infinite store server: %s",
+        #                     infinite_server)
+        #     self.rdma_conn = InfiniStoreKVCacheTransporter._singleton_rdma_conn
+
         self.tp_size = get_tensor_model_parallel_world_size()
         self.tp_rank = get_tensor_model_parallel_rank()
 
-        os.makedirs(shared_signal_folder, exist_ok=True)
+        print("~~~~~~~~~~~~~~~~~ tp rank ", self.tp_rank, " tp size ", self.tp_size)
+
 
     def get_hidden_states_cache_key(self, page_hash: str) -> str:
         return f"{self.model}_{page_hash}_tp_{self.tp_rank}_{self.tp_size}_hs"
@@ -74,48 +98,19 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         return k_cache_key, v_cache_key
 
     def _compute_kv_cache_block_offsets(
-            self, prompt_token_page_hashes: List[str], seq_lens: List[int],
-            slot_mapping: torch.Tensor, layer_idx: int,
-            kv_cache: torch.Tensor) -> Tuple[List[Tuple[str, int]], int]:
-
+            self, prompt_token_page_hashes: List[str], block_ids: List[int],
+            layer_idx: int) -> List[Tuple[str, int]]:
+        
         block_offsets: List[Tuple[str, int]] = []
-        page_size = kv_cache[0][0].numel()  # Number of elements in one page
-        k_or_v_cache_size = kv_cache[0].numel(
-        )  # Size of key or value cache per token
 
-        seq_start_index = 0
-        page_start_index = 0
-        for seq_length in seq_lens:
-            num_pages = math.ceil(seq_length / self.tokens_per_page)
+        for idx in range(len(block_ids)):
+            current_hash = prompt_token_page_hashes[idx]
+            k_cache_key, v_cache_key = self.get_kv_cache_key(
+                current_hash, layer_idx)
+            block_offsets.append((k_cache_key, block_ids[idx] * self.page_size))
+            block_offsets.append((v_cache_key, block_ids[idx] * self.page_size + self.k_or_v_total_size))
 
-            for page_num in range(num_pages):
-                start_token_idx = page_num * self.tokens_per_page
-                page_idx = page_num + page_start_index
-                current_hash = prompt_token_page_hashes[page_idx]
-
-                # Generate cache keys for the current page
-                k_cache_key, v_cache_key = self.get_kv_cache_key(
-                    current_hash, layer_idx)
-
-                # Calculate offset in the kv_cache
-                try:
-                    slot_mapping_value = slot_mapping[seq_start_index +
-                                                      start_token_idx].item()
-                    page_offset = (slot_mapping_value //
-                                   self.tokens_per_page) * page_size
-                except IndexError as e:
-                    logger.error("Invalid slot mapping index %s: %s", page_idx,
-                                 e)
-                    raise
-
-                block_offsets.append((k_cache_key, page_offset))
-                block_offsets.append(
-                    (v_cache_key, page_offset + k_or_v_cache_size))
-
-            seq_start_index += seq_length
-            page_start_index += num_pages
-
-        return block_offsets, page_size
+        return block_offsets
 
     def _compute_hidden_states_block_offsets(
             self, prompt_token_page_hashes: List[str], seq_lens: List[int],
@@ -183,35 +178,20 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                     print(f"Qian wait for kv cache prefill done {wt} times {v_cache_key}")
 
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
-                      prompt_seq_lengths: List[int],
-                      slot_mapping: torch.Tensor, layer_idx: int,
+                      block_ids: List[int], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
         # if layer_idx == 0:
         #     print("Qian------ last hash: ", prompt_token_page_hashes[-1])
 
-        block_offsets, page_size = self._compute_kv_cache_block_offsets(
-            prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
-            layer_idx, kv_cache)
+        block_offsets = self._compute_kv_cache_block_offsets(
+            prompt_token_page_hashes, block_ids, layer_idx)
         
         try:            
             if self.conn.rdma_connected:
-                self.conn.rdma_write_cache(kv_cache, block_offsets, page_size)
+                self.conn.rdma_write_cache(kv_cache, block_offsets, self.page_size)
             else:
-                self.conn.local_gpu_write_cache(kv_cache, block_offsets, page_size)
-
-            if layer_idx == 0:
-                global count
-                count += len(prompt_seq_lengths)
-                last_hash = prompt_token_page_hashes[-1]
-                # for key, _ in block_offsets:
-                #     print(f"Qian write kv cache {count} ------ {key}  {last_hash}")
-                # k_cache_key, v_cache_key = self.get_kv_cache_key(
-                #     prompt_token_page_hashes[-1], layer_idx)
-                # if self.conn.check_exist(k_cache_key) and self.conn.check_exist(v_cache_key):
-                #     print(f"Qian request {count} ------ kv cache exists {k_cache_key}  {v_cache_key}")
-                # else:
-                #     print(f"Qian request {count} ------ kv cache does not exist {k_cache_key}  {v_cache_key}")
+                self.conn.local_gpu_write_cache(kv_cache, block_offsets, self.page_size)
 
         except Exception as e:
             logger.error("Failed to write kv_cache: %s", e)
@@ -221,21 +201,20 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
     def read_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
-                      slot_mapping: torch.Tensor, layer_idx: int,
+                      block_ids: List[int], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
         
         self.verify_kv_cache_prefill_done(prompt_token_page_hashes, prompt_seq_lengths, layer_idx)
 
-        block_offsets, page_size = self._compute_kv_cache_block_offsets(
-            prompt_token_page_hashes, prompt_seq_lengths, slot_mapping,
-            layer_idx, kv_cache)
+        block_offsets = self._compute_kv_cache_block_offsets(
+            prompt_token_page_hashes, block_ids,
+            layer_idx)
         
         RETRY_LIMIT = 10
 
         for attempt in range(RETRY_LIMIT):
             try:
-                # print(f"~~~~~~~~~~ try read cache attempt {attempt}")
-                self.conn.read_cache(kv_cache, block_offsets, page_size)
+                self.conn.read_cache(kv_cache, block_offsets, self.page_size)
                 break  # Exit the loop if successful
             except Exception as e:
                 logger.error("Attempt %d: Failed to read kv_cache: %s", attempt + 1, e)
@@ -295,7 +274,6 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         logger.debug("Loaded hidden_states")
 
-
     def key_exists(self, key: str) -> bool:
         return self.conn.check_exist(key)
 
@@ -305,7 +283,9 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     def synchronize(self) -> None:
         try:
             self.conn.sync()
-            logger.debug("Synchronized with Infinity service")
+            # if self.rdma_conn != self.conn:
+            #     self.rdma_conn.sync()  
+            # logger.debug("Synchronized with Infinity service")
         except Exception as e:
             logger.error("Failed to synchronize: %s", e)
             raise

@@ -7,8 +7,7 @@ class KVCacheTransporterBase(ABC):
 
     @abstractmethod
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
-                      prompt_seq_lengths: List[int],
-                      slot_mapping: torch.Tensor, layer_idx: int,
+                      block_ids: List[int], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
         raise NotImplementedError
@@ -16,7 +15,7 @@ class KVCacheTransporterBase(ABC):
     @abstractmethod
     def read_kv_cache(self, prompt_token_page_hashes: List[str],
                       prompt_seq_lengths: List[int],
-                      slot_mapping: torch.Tensor, layer_idx: int,
+                      block_ids: List[int], layer_idx: int,
                       kv_cache: torch.Tensor) -> None:
 
         raise NotImplementedError
@@ -52,4 +51,8 @@ class KVCacheTransporterBase(ABC):
     @abstractmethod
     def synchronize(self):
 
+        raise NotImplementedError
+    
+    @abstractmethod
+    def publish_kv_cache_prefill_done(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) -> None:
         raise NotImplementedError

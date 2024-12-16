@@ -66,12 +66,20 @@ class CacheEngine:
             self.num_gpu_blocks, self.device_config.device_type)
         self.cpu_cache = self._allocate_kv_cache(self.num_cpu_blocks, "cpu")
 
-    def set_kv_cache_transporter(self):
-        # use params instead of env var
         if os.environ.get("PD_SEPARATE_STAGE", "") != "":
+            self.set_kv_cache_transporter()
 
-            self.cache_config.kv_cache_transporter = InfiniStoreKVCacheTransporter(
-                self.model_config.model)
+    def set_kv_cache_transporter(self):
+        kv_transporter = InfiniStoreKVCacheTransporter(
+            self.model_config.model, self.gpu_cache, self.block_size)
+
+        assert kv_transporter is not None, "KV transporter is not initialized"
+
+        if kv_transporter.conn.rdma_connected:
+            for layer_kv_cache in self.gpu_cache:
+                kv_transporter.conn.register_mr(layer_kv_cache)
+
+        self.cache_config.kv_cache_transporter = kv_transporter
 
     def _allocate_kv_cache(
         self,
@@ -84,8 +92,6 @@ class CacheEngine:
         pin_memory = is_pin_memory_available() if device == "cpu" else False
         kv_cache: List[torch.Tensor] = []
 
-        self.set_kv_cache_transporter()
-
         for _ in range(self.num_attention_layers):
             # null block in CpuGpuBlockAllocator requires at least that
             # block to be zeroed-out.
@@ -95,11 +101,6 @@ class CacheEngine:
                             dtype=self.dtype,
                             pin_memory=pin_memory,
                             device=device))
-
-            # print(f"~~~~~~~~~~ kv_cache memory: {kv_cache[-1].element_size() * kv_cache[-1].numel()/(1024**2):.2f} MB")
-            if self.cache_config.kv_cache_transporter is not None and self.cache_config.kv_cache_transporter.conn.rdma_connected and device != "cpu":
-                self.cache_config.kv_cache_transporter.conn.register_mr(
-                    kv_cache[-1])
 
         return kv_cache
 

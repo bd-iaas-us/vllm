@@ -333,7 +333,7 @@ class LlamaModel(nn.Module):
     ) -> Union[torch.Tensor, IntermediateTensors]:
         import time
         start = time.time()
-        fp_type, kv_cache_transporter, input_token_hashes = (
+        fp_type, kv_cache_transporter, input_token_hashes, block_ids = (
             prepare_kv_cache_transport(input_ids, attn_metadata,
                                        self.cache_config, kwargs))
         
@@ -366,7 +366,7 @@ class LlamaModel(nn.Module):
             for i in range(self.start_layer, self.end_layer):
                 kv_cache_transporter.read_kv_cache(input_token_hashes,
                                                     attn_metadata.seq_lens,
-                                                    attn_metadata.slot_mapping,
+                                                    block_ids,
                                                     i, kv_caches[i])               
             kv_cache_transporter.read_hidden_states(input_token_hashes,
                                             attn_metadata.seq_lens,
@@ -392,8 +392,8 @@ class LlamaModel(nn.Module):
                 # if i == self.start_layer:
                 #     print(f"Qian ---- {count} llama to save kv_cache last hash", input_token_hashes[-1])
                 kv_cache_transporter.save_kv_cache(
-                    input_token_hashes, attn_metadata.seq_lens,
-                    attn_metadata.slot_mapping, i,
+                    input_token_hashes,
+                    block_ids, i,
                     kv_caches[i])
                 
         if fp_type == ForwardPassType.PREFILL:
