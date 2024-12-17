@@ -36,8 +36,6 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         self.page_size = kv_cache_list[0][0][0].numel() 
         self.k_or_v_total_size = kv_cache_list[0][0].numel()
 
-        #TODO: when server is local, use connection_type=infinistore.TYPE_LOCAL_GPU,
-        # otherwise RDMA
 
         infinite_server = os.environ.get("INFINITE_STORE_SERVER",
                                          Default_Infinite_Server)
@@ -62,24 +60,24 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         # Assign the singleton connection to the instance attribute
         self.conn = InfiniStoreKVCacheTransporter._singleton_conn
 
-        # if self.conn.rdma_connected:
-        #     self.rdma_conn = self.conn
-        # else:
-        #     if InfiniStoreKVCacheTransporter._singleton_rdma_conn is None:
-        #         infinite_rdma_config = infinistore.ClientConfig(
-        #             host_addr=infinite_server,
-        #             service_port=22345,
-        #             log_level="info",
-        #             connection_type=infinistore.TYPE_RDMA,
-        #             ib_port=1,
-        #             link_type="Ethernet",
-        #             dev_name="mlx5_0",
-        #         )
-        #         InfiniStoreKVCacheTransporter._singleton_rdma_conn = infinistore.InfinityConnection(infinite_rdma_config)
-        #         InfiniStoreKVCacheTransporter._singleton_rdma_conn.connect()
-        #         logger.info("RDMA Connecting to infinite store server: %s",
-        #                     infinite_server)
-        #     self.rdma_conn = InfiniStoreKVCacheTransporter._singleton_rdma_conn
+        if self.conn.rdma_connected:
+            self.rdma_conn = self.conn
+        else:
+            if InfiniStoreKVCacheTransporter._singleton_rdma_conn is None:
+                infinite_rdma_config = infinistore.ClientConfig(
+                    host_addr=infinite_server,
+                    service_port=22345,
+                    log_level="info",
+                    connection_type=infinistore.TYPE_RDMA,
+                    ib_port=1,
+                    link_type="Ethernet",
+                    dev_name="mlx5_0",
+                )
+                InfiniStoreKVCacheTransporter._singleton_rdma_conn = infinistore.InfinityConnection(infinite_rdma_config)
+                InfiniStoreKVCacheTransporter._singleton_rdma_conn.connect()
+                logger.info("RDMA Connecting to infinite store server: %s",
+                            infinite_server)
+            self.rdma_conn = InfiniStoreKVCacheTransporter._singleton_rdma_conn
 
         self.tp_size = get_tensor_model_parallel_world_size()
         self.tp_rank = get_tensor_model_parallel_rank()
