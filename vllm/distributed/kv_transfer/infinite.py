@@ -36,21 +36,28 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         self.page_size = kv_cache_list[0][0][0].numel() 
         self.k_or_v_total_size = kv_cache_list[0][0].numel()
 
-        # TODO: when server is local, use connection_type=infinistore.TYPE_LOCAL_GPU,
-        # otherwise RDMA
+        
         # TODO: grab the config values dynamically instead of hardcoding
         infinite_server = os.environ.get("INFINITE_STORE_SERVER",
                                          Default_Infinite_Server)
         infinite_server = infinite_server.strip('"')
+
+        # TODO: change to use the config file
+        infinistore_log_level = "info"
+        infinistore_service_port = 22345
+        infinistore_ib_port = 1
+        infinistore_link_type = infinistore.LINK_ETHERNET
+        infinistore_dev_name = "mlx5_0"
+
         if InfiniStoreKVCacheTransporter._singleton_conn is None:
             infinte_config = infinistore.ClientConfig(
                 host_addr=infinite_server,
-                service_port=22345,
-                log_level="info",
+                service_port=infinistore_service_port,
+                log_level=infinistore_log_level,
                 connection_type=infinistore.TYPE_LOCAL_GPU,
-                ib_port=1,
-                link_type="Ethernet",
-                dev_name="mlx5_0",
+                ib_port=infinistore_ib_port,
+                link_type=infinistore_link_type,
+                dev_name=infinistore_dev_name,
             )
             InfiniStoreKVCacheTransporter._singleton_conn = infinistore.InfinityConnection(
                 infinte_config)
@@ -61,6 +68,25 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
 
         # Assign the singleton connection to the instance attribute
         self.conn = InfiniStoreKVCacheTransporter._singleton_conn
+
+        if self.conn.rdma_connected:
+            self.rdma_conn = self.conn
+        else:
+            if InfiniStoreKVCacheTransporter._singleton_rdma_conn is None:
+                infinite_rdma_config = infinistore.ClientConfig(
+                    host_addr=infinite_server,
+                    service_port=infinistore_service_port,
+                    log_level=infinistore_log_level,
+                    connection_type=infinistore.TYPE_RDMA,
+                    ib_port=infinistore_ib_port,
+                    link_type=infinistore_link_type,
+                    dev_name=infinistore_dev_name,
+                )
+                InfiniStoreKVCacheTransporter._singleton_rdma_conn = infinistore.InfinityConnection(infinite_rdma_config)
+                InfiniStoreKVCacheTransporter._singleton_rdma_conn.connect()
+                logger.info("RDMA Connecting to infinite store server: %s",
+                            infinite_server)
+            self.rdma_conn = InfiniStoreKVCacheTransporter._singleton_rdma_conn
 
         self.tp_size = get_tensor_model_parallel_world_size()
         self.tp_rank = get_tensor_model_parallel_rank()
@@ -164,7 +190,9 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         
         try:            
             if self.conn.rdma_connected:
-                self.conn.rdma_write_cache(kv_cache, block_offsets, self.page_size)
+                keys, key_offsets = zip(*block_offsets)
+                remote_addrs = self.conn.allocate_rdma(keys, self.page_size * kv_cache.element_size())
+                self.conn.rdma_write_cache(kv_cache, key_offsets, self.page_size, remote_addrs)
             else:
                 self.conn.local_gpu_write_cache(kv_cache, block_offsets, self.page_size)
 
@@ -195,17 +223,16 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                            prompt_seq_lengths: List[int],
                            hidden_states: torch.Tensor) -> None:
 
-        if self.conn.rdma_connected:
-            self.conn.register_mr(hidden_states)
+        self.rdma_conn.register_mr(hidden_states)
+
         block_offsets = self._compute_hidden_states_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, hidden_states)
 
         try:
             for cache_size, offsets in block_offsets.items():
-                if self.conn.rdma_connected:
-                    self.conn.rdma_write_cache(hidden_states, offsets, cache_size)
-                else:
-                    self.conn.local_gpu_write_cache(hidden_states, offsets, cache_size)
+                keys, key_offsets = zip(*offsets)
+                remote_addrs = self.rdma_conn.allocate_rdma(keys, cache_size * hidden_states.element_size())
+                self.rdma_conn.rdma_write_cache(hidden_states, key_offsets, cache_size, remote_addrs)
         except Exception as e:
             logger.error("Failed to read hidden_states: %s", e)
             raise
@@ -217,6 +244,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                            hidden_states: torch.Tensor) -> None:
 
         hs_cache_key = self.get_hidden_states_cache_key(prompt_token_page_hashes[-1])
+        self.rdma_conn.register_mr(hidden_states)
         wt = 0
         while not self.conn.check_exist(hs_cache_key):
             time.sleep(interval)
@@ -224,14 +252,14 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             if wt % 100 == 0:
                 logger.warning(f"Wait for hidden states cache key {hs_cache_key} for {wt} times")
 
-        if self.conn.rdma_connected:
-            self.conn.register_mr(hidden_states)
+
+        # self.rdma_conn.register_mr(hidden_states)
         block_offsets = self._compute_hidden_states_block_offsets(
             prompt_token_page_hashes, prompt_seq_lengths, hidden_states)
 
         try:
             for cache_size, offsets in block_offsets.items():
-                self.conn.read_cache(hidden_states, offsets, cache_size)
+                self.rdma_conn.read_cache(hidden_states, offsets, cache_size)
         except Exception as e:
             logger.error("Failed to read hidden_states: %s", e)
             raise
