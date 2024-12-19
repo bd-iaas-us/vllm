@@ -62,6 +62,8 @@ from vllm.usage.usage_lib import (UsageContext, is_usage_stats_enabled,
 from vllm.utils import Counter, Device, deprecate_kwargs, weak_bind
 from vllm.version import __version__ as VLLM_VERSION
 
+from vllm.global_cache import global_cache_instance
+
 logger = init_logger(__name__)
 _LOCAL_LOGGING_INTERVAL_SEC = 5
 
@@ -369,6 +371,7 @@ class LLMEngine:
                 if self.model_config.use_async_output_proc else None)
             for v_id in range(self.parallel_config.pipeline_parallel_size)
         ]
+        global_cache_instance.setGlabalCacheBlockNum(self.cache_config.num_global_cache_blocks)
 
         # Metric Logging.
         if self.log_stats:
