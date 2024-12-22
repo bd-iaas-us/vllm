@@ -65,8 +65,11 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         self.tp_size = get_tensor_model_parallel_world_size()
         self.tp_rank = get_tensor_model_parallel_rank()
 
-        self.hs_key_initial = f"hs_{self.model}_tp_{self.tp_rank}_{self.tp_size}_"
-        self.kv_key_initial = f"{self.model}_tp_{self.tp_rank}_{self.tp_size}_"
+        self.hs_key_initial = f"hs/{self.model}/tp_{self.tp_rank}_{self.tp_size}/"
+        self.kv_key_initial = f"kv/{self.model}/tp_{self.tp_rank}_{self.tp_size}/"
+
+        logger.info("Initialized InfiniStoreKVCacheTransporter, model: %s, layers: %d, tokens_per_page: %d, page_size: %.2f K elements, dtype: %s",
+                    self.model, len(self.kv_cache_list), self.tokens_per_page, self.page_size/1024, self.kv_cache_list[0].dtype)
 
 
     def get_hidden_states_cache_key(self, page_hash: str) -> str:
@@ -124,7 +127,14 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         return block_offsets
     
     def _publish_write_completion(self, key: str) -> None:
-        open(os.path.join(shared_signal_folder, key), mode="w").close()
+        file_path = os.path.join(shared_signal_folder, key)
+        directory = os.path.dirname(file_path)
+        try:
+            os.makedirs(directory, exist_ok=True)
+            open(file_path, mode="w").close()
+        except Exception as e:
+            logger.error("Failed to publish completion for %s: %s", key, e)
+            raise
 
     def publish_kv_cache_prefill_done(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) -> None:
 
@@ -188,6 +198,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             self.conn.read_cache(kv_cache, block_offsets, self.page_size)
         except Exception as e:
             logger.error("Failed to read kv_cache: %s", e)
+            raise
 
         logger.debug("Loaded kv_cache for layer %s", layer_idx)
 

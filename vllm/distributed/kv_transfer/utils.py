@@ -113,8 +113,11 @@ def compute_token_page_hashes(prompt_token_ids: torch.Tensor,
             hash_input = prev_hash.encode('utf-8') + tokens_bytes
             current_hash = hashlib.sha256(hash_input).hexdigest()
 
-            hashes.append(current_hash)
+            prev_hash = current_hash
 
+            hashes.append(current_hash)
+   
         seq_index += seq_len
 
     return hashes
+

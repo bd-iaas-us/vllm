@@ -377,6 +377,17 @@ class LlamaModel(nn.Module):
             kv_cache_transporter.synchronize()
 
             return hidden_states
+        
+        if fp_type == ForwardPassType.PREFILL:
+            # TODO: extend it tp support multiple seq_lens
+            # So far, setting max_num_seqs = 1 in prefill side gives the best performance
+            # so we assume only one seq per batch
+            if len(attn_metadata.seq_lens) == 1:
+                last_hs_key = kv_cache_transporter.get_hidden_states_cache_key(input_token_hashes[-1])
+                # hidden states is the last piece to write to cache
+                # if it exists, we assume the kv cache is saved
+                if kv_cache_transporter.key_exists(last_hs_key):
+                    return hidden_states
 
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
