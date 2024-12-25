@@ -188,6 +188,8 @@ def sample_booksum_requests(
         if base_prompt is None:
             raise ValueError(
                 f"No prompt with length around {fix_prompt_len} found in the dataset.")
+
+        print(f"Base prompt: {base_prompt[:50]}")
         
         for i in range(unique_prompt_count):
 
@@ -624,32 +626,32 @@ async def benchmark(
     else:
         raise ValueError(f"Unknown backend: {backend}")
 
-    print("Starting initial single prompt test run...")
+    # print("Starting initial single prompt test run...")
 
-    test_prompt, test_prompt_len, test_output_len, test_mm_content = (
-        input_requests[0])
-    if backend != "openai-chat" and test_mm_content is not None:
-        # multi-modal benchmark is only available on OpenAI Chat backend.
-        raise ValueError(
-            "Multi-modal content is only supported on 'openai-chat' backend.")
-    test_input = RequestFuncInput(
-        model=model_id,
-        prompt=test_prompt,
-        api_url=api_url,
-        prompt_len=test_prompt_len,
-        output_len=test_output_len,
-        logprobs=logprobs,
-        best_of=best_of,
-        multi_modal_content=test_mm_content,
-        ignore_eos=ignore_eos,
-    )
-    test_output = await request_func(request_func_input=test_input)
-    if not test_output.success:
-        raise ValueError(
-            "Initial test run failed - Please make sure benchmark arguments "
-            f"are correctly specified. Error: {test_output.error}")
-    else:
-        print("Initial test run completed. Starting main benchmark run...")
+    # test_prompt, test_prompt_len, test_output_len, test_mm_content = (
+    #     input_requests[0])
+    # if backend != "openai-chat" and test_mm_content is not None:
+    #     # multi-modal benchmark is only available on OpenAI Chat backend.
+    #     raise ValueError(
+    #         "Multi-modal content is only supported on 'openai-chat' backend.")
+    # test_input = RequestFuncInput(
+    #     model=model_id,
+    #     prompt=test_prompt,
+    #     api_url=api_url,
+    #     prompt_len=test_prompt_len,
+    #     output_len=test_output_len,
+    #     logprobs=logprobs,
+    #     best_of=best_of,
+    #     multi_modal_content=test_mm_content,
+    #     ignore_eos=ignore_eos,
+    # )
+    # test_output = await request_func(request_func_input=test_input)
+    # if not test_output.success:
+    #     raise ValueError(
+    #         "Initial test run failed - Please make sure benchmark arguments "
+    #         f"are correctly specified. Error: {test_output.error}")
+    # else:
+    #     print("Initial test run completed. Starting main benchmark run...")
 
     if profile:
         print("Starting profiler...")
@@ -950,6 +952,9 @@ def main(args: argparse.Namespace):
         )
 
     elif args.dataset_name == "booksum":
+        print("~~~~~~~~~~~~")
+        print(args)
+        print("~~~~~~~~~~~~")
         input_requests = sample_booksum_requests(
             dataset_path=args.dataset_path,
             num_requests=args.num_prompts,
@@ -1348,6 +1353,7 @@ if __name__ == "__main__":
                                type=float,
                                default=1,
                                help="the percentage of unique prompts in the test.")
+
 
     # group for dataset specific arguments
     sonnet_group = parser.add_argument_group("sonnet dataset options")
