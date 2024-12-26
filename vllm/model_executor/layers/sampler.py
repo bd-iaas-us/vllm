@@ -485,7 +485,10 @@ def _greedy_sample(
         same as the length of selected_seq_groups. If the corresponding
         seq_group has do_sample=False, tuple contains ([], [])
     """
+    import time
+    start = time.time()
     samples_lst = samples.tolist()
+    print(f"Track -------, samples shape {samples.shape}, samples first 10 elements {samples_lst[:10]} time cost: {time.time() - start}")
     sample_idx = 0
     results: SampleResultType = []
     for seq_group in selected_seq_groups:
