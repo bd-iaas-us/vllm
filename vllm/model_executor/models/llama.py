@@ -61,6 +61,7 @@ from .utils import (AutoWeightsLoader, PPMissingLayer, extract_layer_index,
                     make_empty_intermediate_tensors_factory, make_layers,
                     maybe_prefix)
 
+fake_sampler_output = None
 
 class LlamaMLP(nn.Module):
 
@@ -635,7 +636,17 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
 
     def sample(self, logits: torch.Tensor,
                sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:
+        
+        global fake_sampler_output
+        import os 
+        if os.environ.get("PD_SEPARATE_STAGE", "").lower() == "prefill" and fake_sampler_output is not None:
+            return fake_sampler_output
+
         next_tokens = self.sampler(logits, sampling_metadata)
+
+        if fake_sampler_output is None:
+            fake_sampler_output = next_tokens
+
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str,
