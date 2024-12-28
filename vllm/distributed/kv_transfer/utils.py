@@ -4,7 +4,7 @@ import os
 import torch
 from typing import List
 import hashlib
-import datetime
+import array
 
 from vllm.attention import AttentionMetadata
 
@@ -21,12 +21,9 @@ class ForwardPassType(Enum):
     REGULAR = "regular_pass"
 
 
-def get_forward_pass_type(input_ids: torch.Tensor, attn_metadata: AttentionMetadata, cache_config):
+def get_forward_pass_type(attn_metadata: AttentionMetadata, cache_config):
     pd_stage = os.environ.get("PD_SEPARATE_STAGE", "").lower()
-    print(f"Track ------- get_forward_pass_type 1 {datetime.datetime.now()}")
-    # is_profile_run = torch.any(input_ids == 0).item()
     is_profile_run = cache_config.kv_cache_transporter is None
-    print(f"Track ------- get_forward_pass_type 1 {datetime.datetime.now()}")
     if pd_stage not in pd_separate_stage._value2member_map_ or is_profile_run:
         return ForwardPassType.REGULAR
 
@@ -40,20 +37,17 @@ def get_forward_pass_type(input_ids: torch.Tensor, attn_metadata: AttentionMetad
     return ForwardPassType.REGULAR
 
 
-def prepare_kv_cache_transport(input_ids, attn_metadata, cache_config):
+def prepare_kv_cache_transport(attn_metadata, cache_config):
 
-    print(f"Track ------- prepare_kv_cache_transport 1 {datetime.datetime.now()}")
-    fp_type = get_forward_pass_type(input_ids, attn_metadata, cache_config)
-    print(f"Track ------- prepare_kv_cache_transport 2 {datetime.datetime.now()}")
+    fp_type = get_forward_pass_type(attn_metadata, cache_config)
 
     input_token_hashes = []
     offsets = []
     kv_cache_transporter = cache_config.kv_cache_transporter
     if fp_type in (ForwardPassType.PREFILL, ForwardPassType.FIRST_DECODE):
-        print(f"Track ------- prepare_kv_cache_transport 3 {datetime.datetime.now()}")
-        input_token_hashes = compute_token_page_hashes(input_ids,
-                                                       attn_metadata.seq_lens,
-                                                       kv_cache_transporter.tokens_per_page)
+        input_token_hashes = getattr(attn_metadata, "token_hashes", None)
+        assert input_token_hashes is not None
+        assert input_token_hashes is not None
 
         # Compute block ids for each page in the input sequence
         assert kv_cache_transporter is not None
@@ -95,18 +89,12 @@ def finalize_kv_cache_transport(fp_type, kv_cache_transporter,
 
     return
 
-def compute_token_page_hashes(prompt_token_ids: torch.Tensor,
+def compute_token_page_hashes(prompt_ids: List[int],
                               prompt_seq_lengths: List[int],
                               tokens_per_page=PAGE_SIZE) -> List[str]:
 
     hashes = []
     seq_index = 0
-
-    print(f"Track ------- compute_token_page_hashes 1 {datetime.datetime.now()}")
-    prompt_ids = prompt_token_ids.cpu()
-    print(f"Track ------- compute_token_page_hashes 1 {datetime.datetime.now()}")
-    prompt_ids = prompt_ids.numpy()
-    print(f"Track ------- compute_token_page_hashes 2 {datetime.datetime.now()}")
 
     for seq_len in prompt_seq_lengths:
         seq_tokens = prompt_ids[seq_index:seq_index + seq_len]
@@ -120,18 +108,14 @@ def compute_token_page_hashes(prompt_token_ids: torch.Tensor,
             tokens_in_page = seq_tokens[start_token:end_token]
 
             # Compute hash for the current page
-            tokens_bytes = tokens_in_page.tobytes()
+            tokens_bytes = array.array('l', tokens_in_page).tobytes()
             hash_input = prev_hash.encode('utf-8') + tokens_bytes
             current_hash = hashlib.sha256(hash_input).hexdigest()
 
             prev_hash = current_hash
 
             hashes.append(current_hash)
-            print(f"Track ------- compute_token_page_hashes 3 {datetime.datetime.now()}")
 
-        print(f"Track ------- last hash {current_hash} first hash {hashes[-num_pages]}, first tokens {seq_tokens[:5]}, last tokens {seq_tokens[-5:]} {datetime.datetime.now()}")
-   
         seq_index += seq_len
 
     return hashes
-

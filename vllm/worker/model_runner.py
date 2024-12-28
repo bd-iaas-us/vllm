@@ -915,6 +915,8 @@ class ModelInputForGPUBuilder(ModelRunnerInputBuilderBase[ModelInputForGPU]):
         # Attention metadata.
         attn_metadata = self.attn_metadata_builder.build(
             seq_lens, query_lens, cuda_graph_pad_size, batch_size)
+        
+        self.set_input_token_hashes_in_metadata(attn_metadata, input_tokens, seq_lens)
 
         # LoRA data.
         lora_requests = set()
@@ -984,7 +986,29 @@ class ModelInputForGPUBuilder(ModelRunnerInputBuilderBase[ModelInputForGPU]):
             prompt_adapter_mapping=prompt_adapter_mapping,
             prompt_adapter_requests=prompt_adapter_requests)
 
+    def set_input_token_hashes_in_metadata(self, attn_metadata: AttentionMetadata, input_tokens: List[int], seq_lens: List[int]):
+        """
+        Attach input token hashes to the attention metadata.
+        """
+        import os
+        from vllm.distributed.kv_transfer.utils import compute_token_page_hashes
 
+        if os.environ.get("PD_SEPARATE_STAGE", "") == "":
+            return
+        
+        # it is a profile run
+        if input_tokens[0] == 0:
+            return
+        
+        # only calculate token hashes for the prefill or first decode forward pass
+        if attn_metadata.prefill_metadata is None:
+            # clear the token hashes if they are no longer needed
+            if len(attn_metadata.token_hashes) > 0:
+                attn_metadata.token_hashes = []
+            return
+        
+        attn_metadata.token_hashes = compute_token_page_hashes(input_tokens, seq_lens)
+        
 class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
     """
     Helper class for shared methods between GPU model runners.

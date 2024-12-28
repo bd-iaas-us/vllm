@@ -123,6 +123,8 @@ class AttentionMetadata:
     # `model_executable`.
     multi_modal_placeholder_index_maps: Optional[Dict[
         str, MultiModalPlaceholderMap.IndexMap]]
+    
+    token_hashes: List[str]
 
     @property
     @abstractmethod
