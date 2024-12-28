@@ -538,6 +538,7 @@ def calculate_metrics(
             ttfts.append(outputs[i].ttft)
             e2els.append(outputs[i].latency)
             completed += 1
+            print(f"Request {i} completed ttft {outputs[i].ttft} itl {outputs[i].itl} tpot {tpot} e2el {outputs[i].latency}")
         else:
             actual_output_lens.append(0)
 
@@ -952,9 +953,6 @@ def main(args: argparse.Namespace):
         )
 
     elif args.dataset_name == "booksum":
-        print("~~~~~~~~~~~~")
-        print(args)
-        print("~~~~~~~~~~~~")
         input_requests = sample_booksum_requests(
             dataset_path=args.dataset_path,
             num_requests=args.num_prompts,

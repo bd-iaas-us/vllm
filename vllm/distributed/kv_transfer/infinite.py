@@ -5,6 +5,7 @@ import torch
 import os
 import time
 import infinistore
+import datetime
 
 from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
 from vllm.distributed import (get_tensor_model_parallel_rank,
@@ -147,9 +148,13 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             
             # only need to publish V cache key, as V cache is always written after K cache
             self._publish_write_completion(v_cache_key)
+            print(f"Track ------- publish_kv_cache_prefill_done  {v_cache_key}, {datetime.datetime.now()}")
 
     def verify_kv_cache_prefill_done(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) :
         covered_pages = 0
+        index = 0
+        import time
+        start = time.time()
         for seq_len in seq_lens:
             covered_pages += math.ceil(seq_len / self.tokens_per_page)
             current_hash = input_token_hashes[covered_pages-1]
@@ -164,6 +169,9 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 wt += 1
                 if wt % 100 == 0:
                     logger.warning(f"Wait for kv cache key {v_cache_key} for {wt} times")
+            index += 1
+            print(f"Track ------- {index}/{len(seq_lens)} seq  verify_kv_cache_prefill_done  {v_cache_key}, wait {time.time()-start} {datetime.datetime.now()}")
+            
 
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
                       offsets: List[Tuple[int, int]], layer_idx: int,

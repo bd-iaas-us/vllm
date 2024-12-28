@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define variables
-PORT=8080
+PORT=8000
 MODEL="mistralai/Mistral-7B-Instruct-v0.3"
 MODEL=$(echo "$MODEL" | xargs)
 

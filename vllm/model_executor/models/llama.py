@@ -25,6 +25,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
 import torch
 from torch import nn
 from transformers import LlamaConfig
+import datetime
 
 from vllm.attention import Attention, AttentionMetadata
 from vllm.compilation.decorators import support_torch_compile
@@ -351,6 +352,8 @@ class LlamaModel(nn.Module):
         intermediate_tensors: Optional[IntermediateTensors],
         inputs_embeds: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        
+        print(f"Track ~~~~~~~~~ LlamaModel forward start {datetime.datetime.now()}")
 
         fp_type, kv_cache_transporter, input_token_hashes, offsets = (
             prepare_kv_cache_transport(input_ids, attn_metadata,
@@ -619,9 +622,12 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        print("Track~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+        print(f"Track ~~~~~~~~~ LlamaForCausalLM forward start {datetime.datetime.now()}")
         model_output = self.model(input_ids, positions, kv_caches,
                                   attn_metadata, intermediate_tensors,
                                   inputs_embeds)
+        print(f"Track ~~~~~~~~~ LlamaForCausalLM forward end {datetime.datetime.now()}")
 
         return model_output
 
