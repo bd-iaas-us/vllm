@@ -369,16 +369,26 @@ class LlamaModel(nn.Module):
             residual = intermediate_tensors["residual"]
 
         if fp_type == ForwardPassType.FIRST_DECODE:
-            for i in range(self.start_layer, self.end_layer):
-                kv_cache_transporter.read_kv_cache(input_token_hashes,
-                                                   attn_metadata.seq_lens,
-                                                   offsets, i, kv_caches[i])
-            kv_cache_transporter.read_hidden_states(input_token_hashes,
+            if kv_cache_transporter.check_kv_cache_ready(input_token_hashes[-1]):
+                for i in range(self.start_layer, self.end_layer):
+                    kv_cache_transporter.read_kv_cache(input_token_hashes,
                                                     attn_metadata.seq_lens,
-                                                    hidden_states)
-            kv_cache_transporter.synchronize()
+                                                    offsets, i, kv_caches[i])
+                kv_cache_transporter.read_hidden_states(input_token_hashes,
+                                                        attn_metadata.seq_lens,
+                                                        hidden_states)
+                kv_cache_transporter.synchronize()
 
-            return hidden_states
+                return hidden_states
+            else: 
+                # this is the case to recompute the pre-empted request
+                # since 
+                last_match_page = kv_cache_transporter.get_last_match_page(input_token_hashes)
+                for i in range(self.start_layer, self.end_layer):
+                    kv_cache_transporter.read_kv_cache(input_token_hashes[:last_match_page],
+                                                    attn_metadata.seq_lens,
+                                                    offsets, i, kv_caches[i])
+                hidden_states = hidden_states[last_match_page * kv_cache_transporter.page_size:]
         
         if fp_type == ForwardPassType.PREFILL:
             # TODO: extend it tp support multiple seq_lens

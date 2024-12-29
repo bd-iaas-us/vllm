@@ -267,7 +267,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         return self.conn.check_exist(key)
 
     def get_match_last_index(self, keys: List[str]) -> int:
-        return self.conn.get_match_last_index(keys)
+        v_cache_keys = [self.get_kv_cache_key(key, 0)[1] for key in keys]
+        return self.conn.get_match_last_index(v_cache_keys)
 
     def synchronize(self) -> None:
         try:

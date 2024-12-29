@@ -927,6 +927,12 @@ class Scheduler:
 
         if os.environ.get("PD_SEPARATE_STAGE", "") == "decode" and self.kv_cache_pending:
             import datetime
+            import copy
+
+            # workaround to handle the recompute of pre-emption 
+            # one sequence at a time
+            budget = copy.deepcopy(budget)
+            budget.max_num_seqs = 1
 
             kv_cache_pending = self.kv_cache_pending
             leftover_kv_cache_pending: Deque[SequenceGroup] = deque()
