@@ -488,7 +488,6 @@ def _greedy_sample(
     import time
     start = time.time()
     samples_lst = samples.tolist()
-    print(f"Track -------, samples shape {samples.shape}, samples first 10 elements {samples_lst[:10]} time cost: {time.time() - start}")
     sample_idx = 0
     results: SampleResultType = []
     for seq_group in selected_seq_groups:

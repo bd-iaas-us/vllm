@@ -5,11 +5,12 @@ import torch
 import os
 import time
 import infinistore
-import datetime
 
 from vllm.distributed.kv_transfer.base import KVCacheTransporterBase
 from vllm.distributed import (get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
+
+from vllm.distributed.kv_transfer.utils import PAGE_SIZE
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
     _singleton_conn = None
     _singleton_rdma_conn = None
 
-    def __init__(self, model: str, kv_cache_list: List[torch.Tensor], tokens_per_page: int =16) -> None:
+    def __init__(self, model: str, kv_cache_list: List[torch.Tensor], tokens_per_page: int = 16) -> None:
         if not model:
             raise ValueError("model cannot be empty.")
         if tokens_per_page <= 0:
@@ -34,6 +35,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
         self.model = model.replace("/", "_")
         self.kv_cache_list = kv_cache_list
         self.tokens_per_page = tokens_per_page
+        PAGE_SIZE = tokens_per_page
+
         self.page_size = kv_cache_list[0][0][0].numel() 
         self.k_or_v_total_size = kv_cache_list[0][0].numel()
 
@@ -148,7 +151,12 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
             
             # only need to publish V cache key, as V cache is always written after K cache
             self._publish_write_completion(v_cache_key)
-            print(f"Track ------- publish_kv_cache_prefill_done  {v_cache_key}, {datetime.datetime.now()}")
+
+    def check_kv_cache_ready(self, hash: str) -> bool:
+        _, v_cache_key = self.get_kv_cache_key(
+                    hash, 0)
+        
+        return os.path.exists(os.path.join(shared_signal_folder, v_cache_key))
 
     def verify_kv_cache_prefill_done(self, input_token_hashes: List[str], seq_lens: List[int], layer_idx: int) :
         covered_pages = 0
@@ -168,10 +176,8 @@ class InfiniStoreKVCacheTransporter(KVCacheTransporterBase):
                 time.sleep(interval)
                 wt += 1
                 if wt % 100 == 0:
-                    logger.warning(f"Wait for kv cache key {v_cache_key} for {wt} times")
+                    logger.warning(f"wait for kv cache key {v_cache_key} for {wt} times")
             index += 1
-            print(f"Track ------- {index}/{len(seq_lens)} seq  verify_kv_cache_prefill_done  {v_cache_key}, wait {time.time()-start} {datetime.datetime.now()}")
-            
 
     def save_kv_cache(self, prompt_token_page_hashes: List[str],
                       offsets: List[Tuple[int, int]], layer_idx: int,

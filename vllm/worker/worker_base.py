@@ -278,6 +278,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
             broadcast_data = worker_input.as_broadcastable_tensor_dict()
             broadcast_data.update(model_input.as_broadcastable_tensor_dict())
             broadcast_data.update(kwargs)
+            # this step may cost seconds under high pressure, can we optimize?
             broadcast_tensor_dict(broadcast_data, src=0)
 
         if execute_model_req.async_callback:

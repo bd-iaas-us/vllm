@@ -90,8 +90,10 @@ def finalize_kv_cache_transport(fp_type, kv_cache_transporter,
     return
 
 def compute_token_page_hashes(prompt_ids: List[int],
-                              prompt_seq_lengths: List[int],
-                              tokens_per_page=PAGE_SIZE) -> List[str]:
+                              prompt_seq_lengths: List[int]) -> List[str]:
+    
+    global PAGE_SIZE
+    tokens_per_page = PAGE_SIZE
 
     hashes = []
     seq_index = 0

@@ -1732,8 +1732,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 hidden_or_intermediate_states,
             )
 
-        print(f"Track ~~~~~~~~~ Model Runner 1 {datetime.datetime.now()}")
-
         # Compute the logits in the last pipeline stage.
         if not get_pp_group().is_last_rank:
             if (self.is_driver_worker
@@ -1752,8 +1750,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 hidden_or_intermediate_states.tensors["model_forward_time"] = (
                     torch.tensor(model_forward_time + orig_model_forward_time))
             return hidden_or_intermediate_states
-        
-        print(f"Track ~~~~~~~~~ Model Runner 2 {datetime.datetime.now()}")
 
         logits = self.model.compute_logits(hidden_or_intermediate_states,
                                            model_input.sampling_metadata)
@@ -1763,8 +1759,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
         if model_input.async_callback is not None:
             model_input.async_callback()
-
-        print(f"Track ~~~~~~~~~ Model Runner 4 {datetime.datetime.now()}")
 
         # Sample the next token.
         output: SamplerOutput = self.model.sample(
@@ -1802,8 +1796,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 hidden_states = hidden_or_intermediate_states
 
             output.hidden_states = hidden_states
-
-        print(f"Track ~~~~~~~~~ Model Runner 5 {datetime.datetime.now()}")
 
         return [output]
 

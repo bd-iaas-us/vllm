@@ -161,6 +161,9 @@ def sample_booksum_requests(
 
     filtered_dataset: List[Tuple[str, int, int]] = []
 
+    longest_prompt_ids = None
+    longest_len = -1
+
     with open(
             dataset_path, newline=''
     ) as csvfile:  #, open("/tmp/prompt_15k_to_50k.csv", 'w', newline='') as outfile:
@@ -179,6 +182,11 @@ def sample_booksum_requests(
             prompt_token_ids = tokenizer(prompt).input_ids
 
             prompt_len = len(prompt_token_ids)
+
+            if prompt_len > longest_len:
+                longest_len = prompt_len
+                longest_prompt_ids = prompt_token_ids
+
             if prompt_len < fix_prompt_len * 0.99 or prompt_len > fix_prompt_len * 1.01:
                 continue
 
@@ -186,13 +194,17 @@ def sample_booksum_requests(
             break
 
         if base_prompt is None:
-            raise ValueError(
-                f"No prompt with length around {fix_prompt_len} found in the dataset.")
-
+            if longest_len <= fix_prompt_len or longest_prompt_ids is None:
+                raise ValueError(
+                    f"No prompt with length around {fix_prompt_len} found in the dataset.")
+            else:
+                print(f"No prompt with length around {fix_prompt_len} found in the dataset. Replace with the longest prompt found chopped.")
+                truncated_token_ids = longest_prompt_ids[:fix_prompt_len]
+                base_prompt = tokenizer.decode(truncated_token_ids, skip_special_tokens=True)
+                
         print(f"Base prompt: {base_prompt[:50]}")
         
         for i in range(unique_prompt_count):
-
             prompt = str(i+1) + " " + base_prompt
             prompt_token_ids = tokenizer(prompt).input_ids
             prompt_len = len(prompt_token_ids)
@@ -538,7 +550,6 @@ def calculate_metrics(
             ttfts.append(outputs[i].ttft)
             e2els.append(outputs[i].latency)
             completed += 1
-            print(f"Request {i} completed ttft {outputs[i].ttft} itl {outputs[i].itl} tpot {tpot} e2el {outputs[i].latency}")
         else:
             actual_output_lens.append(0)
 
